@@ -3,11 +3,45 @@
 #include  <sys/shm.h>
 #include  <stdio.h>
 #include  <stdlib.h>
+#include <string.h>
 #include  "Estructuras.h"
 
+struct Datos  *datos;
+
+int loadCsv(char* csvFile){
+   char buffer[1024];
+   char *record,*line;
+   int i=0,j=0;
+   FILE *fstream = fopen(csvFile,"r");
+   if(fstream == NULL){
+      printf("cargadorDatos->loadCsv, error al abrir el archivo.\n");
+      return -1;
+   }
+   while((line=fgets(buffer,sizeof(buffer),fstream))!=NULL){ 
+     j=0;
+     record = strtok(line,",");
+     while(record != NULL){
+          datos->grafo[i][j] = atoi(record);
+          record = strtok(NULL,",");
+          j++; 
+     }     
+     i++;
+   }
+   if (i!=j){
+     printf("cargadorDatos->loadCsv, error matriz no cuadrada.\n");
+     exit(1);
+   }
+   datos->cantidadNodos = j;
+   return 1;
+}
+
+
 int  main(int  argc, char *argv[]){
-     int            mcID;
-     struct Datos  *datos;
+     int mcID;
+     if (argc != 2) {
+          printf("Use: %s csvFile \n", argv[0]);
+          exit(1);
+     }
 
      mcID = shmget(ID_MC, sizeof(struct Datos), IPC_CREAT | 0666);
      if (mcID < 0) {
@@ -24,13 +58,8 @@ int  main(int  argc, char *argv[]){
      printf("cargadorDatos->main, Mapeo a memoria compartida aceptada.\n");
      
      datos->status  = NOT_READY;
-     datos->data[0] = 1;
-     datos->data[1] = 1;
-     datos->data[2] = 1;
-     datos->data[3] = 1;
-     printf("cargadorDatos->main, has filled %d %d %d %d to shared memory...\n",
-            datos->data[0], datos->data[1], 
-            datos->data[2], datos->data[3]);
+     loadCsv(argv[1]);
+     printf("cargadorDatos->main, has filled\n");
      datos->status = FILLED;
      
      printf("Please start the client in another window...\n");
