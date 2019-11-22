@@ -39,7 +39,7 @@ int loadCsv(char* csvFile){
 int  main(int  argc, char *argv[]){
      int mcID;
      if (argc != 2) {
-          printf("Use: %s csvFile \n", argv[0]);
+          printf("Usar: %s csvFile \n", argv[0]);
           exit(1);
      }
 
@@ -57,21 +57,58 @@ int  main(int  argc, char *argv[]){
      }
      printf("cargadorDatos->main, Mapeo a memoria compartida aceptada.\n");
      
-     datos->status  = NOT_READY;
-     loadCsv(argv[1]);
-     printf("cargadorDatos->main, has filled\n");
-     datos->status = FILLED;
+     datos->status  = ACTUALIZANDO;
+     int estado = loadCsv(argv[1]);
+     if(estado<=0){
+          exit(1);
+     }
+     printf("cargadorDatos->main, Se ha cargado el grafo correctamente.\n");
+     datos->status = ACTUALIZADO;
+     char actualizacion[20];
+     char* elemento;
+     int nodoA =-1, nodoB=-1, peso=-1;
+     while(1){
+          memset(actualizacion, 0, 20 * (sizeof actualizacion[0]) );
+          printf("Ingrese alguna actualización de distancias(ejemplo: 1-2-23):");
+          scanf("%s",actualizacion);
+          elemento = strtok(actualizacion,"-");
+          if(elemento != NULL){
+               nodoA = atoi(elemento);
+               elemento = strtok(NULL,"-");
+               if(elemento != NULL){
+                    nodoB = atoi(elemento);
+                    elemento = strtok(NULL,"-");
+                    if(elemento != NULL){
+                         peso = atoi(elemento);
+                    }else{
+                         printf("cargadorDatos->main, Incorrecto valor del peso.\n");
+                         continue;
+                    }
+               }else{
+                    printf("cargadorDatos->main, Incorrecto valor del nodo2.\n");
+                    continue;
+               } 
+          }else{
+               printf("cargadorDatos->main, Incorrecto valor del nodo1.\n");
+               continue;
+          }
+          if (nodoA > MAX || nodoB > MAX){
+               printf("cargadorDatos->main, Error nodos deben valores menores a: %d\n", MAX);
+               continue;
+          }
+          printf("%d-%d=%d\n",nodoA,nodoB,peso);
+          printf("actualizando\n");
+          datos->status = ACTUALIZANDO;
+          datos->grafo[nodoA][nodoB]=peso;
+          datos->status = ACTUALIZADO;
+          printf("actualizado\n");
      
-     printf("Please start the client in another window...\n");
-                 
-     while (datos->status != TAKEN)
-          sleep(1);
+     }
           
-     printf("Server has detected the completion of its child...\n");
+     printf("cargadorDatos->main, Finalizando.\n");
      shmdt((void *) datos);
-     printf("Server has detached its shared memory...\n");
+     printf("cargadorDatos->main,  liberar memoria compartido\n");
      shmctl(mcID, IPC_RMID, NULL);
-     printf("Server has removed its shared memory...\n");
-     printf("Server exits...\n");
+     printf("cargadorDatos->main, memoria copartida a sido eliminada.\n");
      return 0;
 }

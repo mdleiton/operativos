@@ -1,15 +1,15 @@
-#define  NOT_READY  -1
-#define  FILLED     0
-#define  TAKEN      1
+#define ACTUALIZANDO -1
+#define ACTUALIZADO   0
 #define ID_MC 123
 #define INFINITY 9999
-#define MAX 14
+#define MAX 4
 
 
 struct Datos {
 	int  status;
 	int grafo[MAX][MAX];
 	int cantidadNodos;
+
 };
 
 

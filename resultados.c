@@ -65,16 +65,15 @@ void obtenerFrecuencia(){
                if(i!=startnode){
                     //printf("\nDistance of node%d=%d",i,distance[startnode][i]);
                     frecuencia[i]+=1;
-                    //printf("\nPath=%d",i);
+                    printf("\nPath=%d",i);
                     k=i;
                     do{
                          k=pred[startnode][k];
+                         printf("<-%d.",k);
                          frecuencia[k]+=1;
-                         //printf("<-%d",k);
                     }while(k!=startnode);
                }
           }
-
      }
 }
 
@@ -95,7 +94,7 @@ int  main(void){
      }
      printf("resultado->main, Mapeo a memoria compartida aceptada.\n");
      
-     while (datos->status != FILLED);
+     while (datos->status != ACTUALIZADO);
      printf("resultado->main, Contenido listo para realizar calculos.\n");
      
      for(int i=0;i<MAX;i++){
@@ -105,11 +104,10 @@ int  main(void){
      }
      obtenerFrecuencia();
      for(int i=0;i<MAX;i++){
-          //varios hilos
-          printf("%d<-%d \n",i, frecuencia[i]);
+          // varios hilos
+          printf(" \n%d<-%d",i, frecuencia[i]);
      }
-     datos->status = TAKEN;
-     
+
      printf("resultado->main, Finalización de cálculos.\n");
      shmdt((void *) datos);
      printf("resultado->main, Desvinculado la memoria compartida\n");
