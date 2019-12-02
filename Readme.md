@@ -21,7 +21,7 @@ Entonces su sistema debe de tener al menos dos componentes: (a) Un programa que 
 
 1. Diagrama.
 
-![Alt text](demos/diagrama.png "Diagrama")
+![Alt text](diagrama.png "Diagrama")
 
 2. Descripción
 
