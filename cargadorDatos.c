@@ -171,7 +171,11 @@ int  main(int  argc, char *argv[]){
           printf("%d-%d=%d\n",nodoA,nodoB,peso);
           printf("cargadorDatos->main, actualizando\n");
           sem_wait(&datos->mutex);
-          datos->grafo[nodoA][nodoB]=peso;
+          if(datos->grafo[nodoA][nodoB] != peso){
+            datos->grafo[nodoA][nodoB]=peso;
+          }else{
+            printf("cargadorDatos->main, no se requieren calculos.\n");
+          }
           sem_post(&datos->mutex); 
           // envio de señal a otro proceso para notificar que se ha actualiza el grafo
           send = enviarSenal(PROGRAMA_RESULTADO, 1, SIGNEWDATA);
