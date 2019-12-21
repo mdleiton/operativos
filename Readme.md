@@ -21,7 +21,7 @@ Entonces su sistema debe de tener al menos dos componentes: (a) Un programa que 
 
 1. Diagrama.
 
-![Alt text](diagrama.png "Diagrama")
+![Alt text](1parcial/diagrama.png "Diagrama")
 
 2. Descripción
 
@@ -60,6 +60,7 @@ Con el manejo de señales implementado se puedan ejecutar en cualquier orden y a
 
 Para compilar:\
 ```
+    cd 1parcial/
     $ make all
 ```
 
@@ -80,6 +81,11 @@ Para eliminar los binarios/archivos creados:\
 ```
     $make clean
 ```
+
+
+2019-2S - Segundo Parcial
+------------------------
+
 
 ----------------------------------
 ### Autor ###
