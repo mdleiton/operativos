@@ -1,8 +1,12 @@
 *.o
 *.so
 *.so.*
+.idea/
 
 ecargadorDatos
 eresultados
 0
 1
+
+eorder_gens
+eplanificadorBrazosRoboticos
