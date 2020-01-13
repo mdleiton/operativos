@@ -7,13 +7,37 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include "Cola.h"
+#include "BrazoRobotico.h"
 
 struct Cola *cola;
+struct BrazoRobotico *brazosCola;
+int n_brazos;
+int n_pedidosxbrazo;
+int esquema;
 
 int main(int argc, char *argv[]){
-    // Obtiene los pedidos por socket
+    // verificando ingreso correcto de parametros
+    if (argc != 4) {
+        printf("Usar: %s N_BRAZOS N_PEDIDOSXBRAZO ESQUEMAPLANIFICACION\n", argv[0]);
+        exit(1);
+    }
+    n_brazos = atoi(argv[1]);
+    if(n_brazos == 0){
+        printf("Parámetro N_BRAZOS inválido.\n");
+        exit(1);
+    }
+    n_pedidosxbrazo = atoi(argv[2]);
+    if(n_pedidosxbrazo == 0){
+        printf("Parámetro N_PEDIDOSXBRAZO inválido.\n");
+        exit(1);
+    }
+    esquema = atoi(argv[3]);
+    if(esquema == 0 || esquema > 4){
+        printf("Parámetro ESQUEMAPLANIFICACION inválido.\n");
+        exit(1);
+    }
 
-	//Declaring process variables.
+    // Obtiene los pedidos por socket
 	int server_sockfd, client_sockfd;
 	int server_len;
 	int rc;
@@ -45,6 +69,9 @@ int main(int argc, char *argv[]){
     cola->primero = NULL;
     cola->final = NULL;
     char data[MAX];
+
+    //definiendo los brazos roboticos
+
 
     // recibiendo pedidos
 	while(1){
