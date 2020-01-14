@@ -5,6 +5,7 @@
 #include<stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include "BrazoRobotico.h"
 
 /**
  * Lista de pedidos */
@@ -14,7 +15,7 @@ struct Pedido{
     int id;
     int totalPendientes;
     int total;
-    int brazoId;
+    struct BrazoRobotico* brazo;
     struct Pedido *siguiente;
 };
 
@@ -44,12 +45,13 @@ void imprimirLista(struct Pedidos *pedidos) {
  * @param id identificador de pedido
  * @param data contenido del pedido
  */
-void insertarPrimero(int id, int data, struct Pedidos *pedidos) {
-    struct Pedido *link = (struct Pedido*) malloc(sizeof(struct Pedido));
-    link->id = id;
-    link->data = data;
-    link->siguiente = pedidos->primero;  // primer elemento ahora es segundo
-    pedidos->primero = link;        // link ahora es el primer elemento
+struct Pedido* insertarPrimero(int id, int data, struct Pedidos *pedidos) {
+    struct Pedido *nuevoPedido = (struct Pedido*) malloc(sizeof(struct Pedido));
+    nuevoPedido->id = id;
+    nuevoPedido->data = data;
+    nuevoPedido->siguiente = pedidos->primero;  // primer elemento ahora es segundo
+    pedidos->primero = nuevoPedido;        // link ahora es el primer elemento
+    return nuevoPedido;
 }
 
 /**
