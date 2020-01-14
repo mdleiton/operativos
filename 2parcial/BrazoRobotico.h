@@ -4,18 +4,19 @@
 //
 #include <stdio.h>
 #include <stdlib.h>
+#include "Util.h"
 
 /**
  * Estructura de lista de Brazos robóticos
  */
 struct BrazoRobotico {
-    int estado;
     int id;
     int data;
     int pendientesItem;
     int cantPedidos;
     int* pedidosId;
     int prioridad;  // valores bajos indican alta prioridad
+    int estado;
     struct BrazoRobotico* siguiente;
 };
 
@@ -24,10 +25,15 @@ struct BrazoRobotico {
  * @param data
  * @param prioridad
  * @return    */
-struct BrazoRobotico* nuevaCola(int data, int prioridad){
+struct BrazoRobotico* nuevaCola(int data, int id, int prioridad, int cantidad_pedidos){
     struct BrazoRobotico* temporal = (struct BrazoRobotico*)malloc(sizeof(struct BrazoRobotico));
     temporal->data = data;
+    temporal->id = id;
     temporal->prioridad = prioridad;
+    temporal->cantPedidos = 0;
+    temporal->pendientesItem = 0;
+    //temporal->(struct Cola*)malloc(sizeof(struct Cola));
+    temporal->estado = BRAZO_DISPONIBLE;
     temporal->siguiente = NULL;
     return temporal;
 }
@@ -48,19 +54,20 @@ void pop(struct BrazoRobotico** inicio){
  * @param d
  * @param p
  */
-void push(struct BrazoRobotico** inicio, int d, int p){
+struct BrazoRobotico* push(struct BrazoRobotico** inicio, int data, int id, int prioridad, int cantidad_pedidos){
     struct BrazoRobotico* start = (*inicio);
-    struct BrazoRobotico* temp = nuevaCola(d, p);
-    if ((*inicio)->prioridad > p) {
+    struct BrazoRobotico* temp = nuevaCola(data, id, prioridad, cantidad_pedidos);
+    if ((*inicio)->prioridad > prioridad) {
         temp->siguiente = *inicio;
         (*inicio) = temp;
     }else{
-        while (start->siguiente != NULL && start->siguiente->prioridad < p) {
+        while (start->siguiente != NULL && start->siguiente->prioridad < prioridad) {
             start = start->siguiente;
         }
         temp->siguiente = start->siguiente;
         start->siguiente = temp;
     }
+    return temp;
 }
 
 /**
@@ -68,11 +75,12 @@ void push(struct BrazoRobotico** inicio, int d, int p){
  * @param inicio
  * @return
  */
-int isEmpty(struct BrazoRobotico** inicio){
+int vaciaCola(struct BrazoRobotico** inicio){
     return (*inicio) == NULL;
 }
 
 //Prueba de cola de prioridad
+/*
 int main(){
     struct BrazoRobotico* pq = nuevaCola(4, 1);
     push(&pq, 5, 2);
@@ -85,3 +93,4 @@ int main(){
     }
     return 0;
 }
+ */
