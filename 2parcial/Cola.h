@@ -46,7 +46,7 @@ void enqueue(char valor[MAX], struct Cola *cola){
  * Permite presenta los elementos de una cola
  * @param cola
  */
-void display(struct Cola *cola){
+void imprimir(struct Cola *cola){
     struct elemento *temporal;
     temporal = cola->primero;
     printf("\n");
