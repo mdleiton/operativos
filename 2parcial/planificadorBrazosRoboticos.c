@@ -14,6 +14,7 @@
 
 struct Cola *cola;
 struct BrazoRobotico *brazosCola;
+struct Pedidos *pedidos;
 int n_brazos;
 int n_pedidosxbrazo;
 int esquema;
@@ -117,20 +118,56 @@ int main(int argc, char *argv[]){
 	}
 
 	// desencolando mensajes. esto debe ir en otro hilo
-	//verificando en pedidos y luego asignando a brazo
+    pedidos = (struct Pedidos*)malloc(sizeof(struct Pedidos));
+    pedidos->primero = NULL;
+    pedidos->final = NULL;
+
     int resultado;
+    char* elemento;
+    int id;
 	while(1){
         memset(data, '\0', MAX* sizeof(char));
 	    resultado = dequeue(cola, data);
-	    if(resultado==0) break;
+        if(resultado==0) break;
 
-	    //llenar lista de pedidos
-	    //asignar a un brazo robotico
+        elemento = strtok(data,"-");
+        if(elemento != NULL){
+            id = atoi(elemento);
+            elemento = strtok(NULL,"-");
+            /*
+            if(elemento != NULL){
+                nodoB = atoi(elemento);
+                elemento = strtok(NULL,"-");
+                if(elemento != NULL){
+                    peso = atoi(elemento);
+                }else{
+                    printf("cargadorDatos->main, Incorrecto valor del peso.\n");
+                    continue;
+                }
+            }else{
+                printf("cargadorDatos->main, Incorrecto valor del nodo2.\n");
+                continue;
+            }
+             */
+            struct Pedido *pedido = find(id, pedidos);
+            if(pedido != NULL) {
+                printf("Pedido ya registrado: ");
+                //encolar al respecto brazo
+                printf("(%d,%d) ",pedido->id,pedido->data);
+                printf("\n");
+            } else {
+                //setear atributos por defecto
+                insertarPrimero(id, 1, pedidos);
+                // si esta asignar a un brazo
+            }
+        }else{
+            printf("Incorrecto formato.\n");
+            continue;
+        }
 	}
-
     imprimir(cola);
-
 	printf("server exiting\n");
+    imprimirLista(pedidos);
 	close(client_sockfd);
 	return 0;
 }

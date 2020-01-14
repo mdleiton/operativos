@@ -29,7 +29,7 @@ struct Pedidos{
 /**
  * Imprime todos los pedidos desde el inicio
  */
-void printList(struct Pedidos *pedidos) {
+void imprimirLista(struct Pedidos *pedidos) {
     struct Pedido *ptr = pedidos->primero;
     printf("\n[ ");
     while(ptr != NULL) {
