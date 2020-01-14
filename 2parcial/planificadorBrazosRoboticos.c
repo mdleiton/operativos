@@ -7,8 +7,8 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <pthread.h>
-#include "Cola.h"
-#include "BrazoRobotico.h"
+//#include "Cola.h"
+//#include "BrazoRobotico.h"
 #include "PedidosLista.h"
 #include "Util.h"
 
@@ -26,6 +26,25 @@ void *thread_brazo_robotico(void *arg){
 
     pthread_t thread = pthread_self();
     // procesar datos de hilo
+    return NULL;
+}
+
+struct BrazoRobotico * asignarBrazo(struct Pedido* pedido){
+    struct BrazoRobotico* brazo = popP(&brazosCola);
+    if(brazo->prioridad == PRIORIDAD_ESQUEMA_PRIMERO_OCUPADO){
+        //ya no disponible brazo.
+        //?
+        pushBrazo(&brazosCola, brazo);
+    }
+    if(brazo->cantPedidos > n_pedidosxbrazo){
+        brazo->prioridad = PRIORIDAD_ESQUEMA_PRIMERO_OCUPADO;
+        pushBrazo(&brazosCola, brazo);
+        //repetir ?
+    }else{
+        brazo->cantPedidos +=1;
+        pushBrazo(&brazosCola, brazo);
+        return brazo;
+    }
     return NULL;
 }
 
@@ -97,7 +116,7 @@ int main(int argc, char *argv[]){
             printf("error al crear thread\n");
         }
         for (int id = 1; id <= n_brazos; id++) {
-            struct BrazoRobotico *t = push(&brazosCola, 0, id, PRIORIDAD_ESQUEMA_PRIMERO_DISPONIBLE, n_pedidosxbrazo);
+            struct BrazoRobotico *t = pushP(&brazosCola, 0, id, PRIORIDAD_ESQUEMA_PRIMERO_DISPONIBLE, n_pedidosxbrazo);
             estado_hilo = pthread_create(&thread, NULL, thread_brazo_robotico, (void*) t);
             if (estado_hilo != 0){
                 printf("error al crear thread\n");
@@ -133,32 +152,24 @@ int main(int argc, char *argv[]){
         elemento = strtok(data,"-");
         if(elemento != NULL){
             id = atoi(elemento);
-            elemento = strtok(NULL,"-");
-            /*
-            if(elemento != NULL){
-                nodoB = atoi(elemento);
-                elemento = strtok(NULL,"-");
-                if(elemento != NULL){
-                    peso = atoi(elemento);
-                }else{
-                    printf("cargadorDatos->main, Incorrecto valor del peso.\n");
-                    continue;
-                }
-            }else{
-                printf("cargadorDatos->main, Incorrecto valor del nodo2.\n");
-                continue;
-            }
-             */
+
+            //validar el 0 al finalizar un pedido
             struct Pedido *pedido = find(id, pedidos);
             if(pedido != NULL) {
                 printf("Pedido ya registrado: ");
-                //encolar al respecto brazo
+                //encolar al respectivo brazo
                 printf("(%d,%d) ",pedido->id,pedido->data);
+                enqueue(data, pedido->brazo->cola);
                 printf("\n");
             } else {
                 //setear atributos por defecto
-                insertarPrimero(id, 1, pedidos);
-                // si esta asignar a un brazo
+                pedido = insertarPrimero(id, 1, pedidos);
+                struct BrazoRobotico* brazo = asignarBrazo(pedido);
+                if(brazo == NULL){
+                    // todos ocupados
+                }else{
+                    pedido->brazo = brazo;
+                }
             }
         }else{
             printf("Incorrecto formato.\n");
@@ -167,7 +178,7 @@ int main(int argc, char *argv[]){
 	}
     imprimir(cola);
 	printf("server exiting\n");
-    imprimirLista(pedidos);
+    //imprimirLista(pedidos);
 	close(client_sockfd);
 	return 0;
 }
