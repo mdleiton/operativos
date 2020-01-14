@@ -4,6 +4,7 @@
 //
 #include <stdio.h>
 #include <stdlib.h>
+#include "Cola.h"
 #include "Util.h"
 
 /**
@@ -14,9 +15,10 @@ struct BrazoRobotico {
     int data;
     int pendientesItem;
     int cantPedidos;
-    int* pedidosId;
     int prioridad;  // valores bajos indican alta prioridad
     int estado;
+    //struct Pedidos *pedidos; // sin usar
+    struct Cola *cola;
     struct BrazoRobotico* siguiente;
 };
 
@@ -32,7 +34,11 @@ struct BrazoRobotico* nuevaCola(int data, int id, int prioridad, int cantidad_pe
     temporal->prioridad = prioridad;
     temporal->cantPedidos = 0;
     temporal->pendientesItem = 0;
-    //temporal->(struct Cola*)malloc(sizeof(struct Cola));
+
+    temporal->cola = (struct Cola*)malloc(sizeof(struct Cola));
+    temporal->cola->primero = NULL;
+    temporal->cola->final = NULL;
+
     temporal->estado = BRAZO_DISPONIBLE;
     temporal->siguiente = NULL;
     return temporal;
@@ -42,10 +48,11 @@ struct BrazoRobotico* nuevaCola(int data, int id, int prioridad, int cantidad_pe
  * remueve el brazo robótico de más alta prioridad
  * @param brazo
  */
-void pop(struct BrazoRobotico** inicio){
+struct BrazoRobotico* popP(struct BrazoRobotico** inicio){
     struct BrazoRobotico* temporal = *inicio;
     (*inicio) = (*inicio)->siguiente;
-    free(temporal);
+    return temporal;
+    //que pasa cuando esta vacio
 }
 
 /**
@@ -54,7 +61,7 @@ void pop(struct BrazoRobotico** inicio){
  * @param d
  * @param p
  */
-struct BrazoRobotico* push(struct BrazoRobotico** inicio, int data, int id, int prioridad, int cantidad_pedidos){
+struct BrazoRobotico* pushP(struct BrazoRobotico** inicio, int data, int id, int prioridad, int cantidad_pedidos){
     struct BrazoRobotico* start = (*inicio);
     struct BrazoRobotico* temp = nuevaCola(data, id, prioridad, cantidad_pedidos);
     if ((*inicio)->prioridad > prioridad) {
@@ -68,6 +75,20 @@ struct BrazoRobotico* push(struct BrazoRobotico** inicio, int data, int id, int 
         start->siguiente = temp;
     }
     return temp;
+}
+
+void pushBrazo(struct BrazoRobotico** inicio, struct BrazoRobotico *brazo){
+    struct BrazoRobotico* start = (*inicio);
+    if ((*inicio)->prioridad > brazo->prioridad) {
+        brazo->siguiente = *inicio;
+        (*inicio) = brazo;
+    }else{
+        while (start->siguiente != NULL && start->siguiente->prioridad < brazo->prioridad) {
+            start = start->siguiente;
+        }
+        brazo->siguiente = start->siguiente;
+        start->siguiente = brazo;
+    }
 }
 
 /**
