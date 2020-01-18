@@ -49,6 +49,8 @@ struct Pedido* insertarPrimero(int id, int data, struct Pedidos *pedidos) {
     struct Pedido *nuevoPedido = (struct Pedido*) malloc(sizeof(struct Pedido));
     nuevoPedido->id = id;
     nuevoPedido->data = data;
+    nuevoPedido->total=data;
+    nuevoPedido->brazo = NULL;
     nuevoPedido->siguiente = pedidos->primero;  // primer elemento ahora es segundo
     pedidos->primero = nuevoPedido;        // link ahora es el primer elemento
     return nuevoPedido;
