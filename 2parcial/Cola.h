@@ -5,13 +5,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <semaphore.h>
 #define MAX 200
 
 /**
  * Elemento de la cola
  */
 struct elemento{
-    char data[MAX];
+    char data[MAX];     // usando en el buffer principal
     struct elemento *siguiente;
 };
 
@@ -19,8 +20,13 @@ struct elemento{
  * Estructura de una cola
  */
 struct Cola{
+    // mutex y non_zero_item para que la cola funcione como un buffer de tamaño ilimitado.
+    pthread_mutex_t mutex;
+    pthread_cond_t non_zero_item;
+    int contador;
     struct elemento *primero;
     struct elemento *final;
+
 };
 
 /**
@@ -30,9 +36,12 @@ struct Cola{
  */
 void enqueue(char valor[MAX], struct Cola *cola){
     struct elemento *nuevo = (struct elemento*)malloc(sizeof(struct elemento));
-    memset(nuevo->data,'\0', MAX* sizeof(char));
+    memset(nuevo->data,0, MAX* sizeof(char));
     memcpy(nuevo->data, valor, MAX* sizeof(char));
     nuevo->siguiente = NULL;
+
+    pthread_mutex_lock(&cola->mutex);
+
     if (cola->final == NULL){
         cola->primero = nuevo;
         cola->final = nuevo;
@@ -40,6 +49,10 @@ void enqueue(char valor[MAX], struct Cola *cola){
         cola->final->siguiente = nuevo;
         cola->final = cola->final->siguiente;
     }
+
+    cola->contador = cola->contador + 1;
+    pthread_cond_signal(&cola->non_zero_item);
+    pthread_mutex_unlock(&cola->mutex);
 }
 
 /**
@@ -60,19 +73,30 @@ void imprimir(struct Cola *cola){
  * Permite eliminar un elemento de una cola específica
  * @param cola
  */
-int dequeue(struct Cola *cola, char data[MAX]){
+int dequeue(struct Cola *cola, char data[MAX], int flag){
+    pthread_mutex_lock(&cola->mutex);
     if (cola->primero == NULL){
-        printf("\n\nLa cola esta vacia.\n");
-        return 0;
-    }else{
-        struct elemento *temporal;
-        temporal = cola->primero;
-        cola->primero = cola->primero->siguiente;
-        sprintf(data,"%s", temporal->data);
-        printf("\n\n%s. deleted", temporal->data);
-        free(temporal);
-        return 1;
+        if(flag == 1){
+            pthread_mutex_unlock(&cola->mutex);
+            return 0;
+        }
+        while(cola->contador == 0)
+            pthread_cond_wait(&cola->non_zero_item, &cola->mutex);
+        pthread_mutex_unlock(&cola->mutex);
+        return 2;
     }
+
+    while(cola->contador == 0)
+        pthread_cond_wait(&cola->non_zero_item, &cola->mutex);
+    struct elemento *temporal;
+    temporal = cola->primero;
+    cola->primero = cola->primero->siguiente;
+    sprintf(data,"%s", temporal->data);
+    free(temporal);
+
+    cola->contador = cola->contador -1;
+    pthread_mutex_unlock(&cola->mutex);
+    return 1;
 }
 
 /* Prueba cola
