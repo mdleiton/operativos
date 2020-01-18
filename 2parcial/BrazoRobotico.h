@@ -8,17 +8,25 @@
 #include "Util.h"
 
 /**
+ * Informacion minima requerida que un brazo debe saber de un pedido
+ */
+struct pedidosMin{
+    int id;
+    int totalPendientes;
+};
+
+
+/**
  * Estructura de lista de Brazos robóticos
  */
 struct BrazoRobotico {
     int id;
     int data;
     int pendientesItem;
-    int cantPedidos;
-    int prioridad;  // valores bajos indican alta prioridad
+    int cantPedidos;  // sera mi prioridad
     int estado;
-    //struct Pedidos *pedidos; // sin usar
     struct Cola *cola;
+    struct pedidosMin* pedidos;
     struct BrazoRobotico* siguiente;
 };
 
@@ -27,17 +35,22 @@ struct BrazoRobotico {
  * @param data
  * @param prioridad
  * @return    */
-struct BrazoRobotico* nuevaCola(int data, int id, int prioridad, int cantidad_pedidos){
+struct BrazoRobotico* nuevaCola(int data, int id, int cantidad_pedidos){
     struct BrazoRobotico* temporal = (struct BrazoRobotico*)malloc(sizeof(struct BrazoRobotico));
     temporal->data = data;
     temporal->id = id;
-    temporal->prioridad = prioridad;
     temporal->cantPedidos = 0;
     temporal->pendientesItem = 0;
 
     temporal->cola = (struct Cola*)malloc(sizeof(struct Cola));
     temporal->cola->primero = NULL;
     temporal->cola->final = NULL;
+    temporal->cola->contador = 0;
+
+    temporal->pedidos = (struct pedidosMin*)malloc(cantidad_pedidos * sizeof(struct pedidosMin));
+    for (int i = 0; i < cantidad_pedidos; i++) {
+        temporal->pedidos[i].id = -1;
+    }
 
     temporal->estado = BRAZO_DISPONIBLE;
     temporal->siguiente = NULL;
@@ -52,7 +65,7 @@ struct BrazoRobotico* popP(struct BrazoRobotico** inicio){
     struct BrazoRobotico* temporal = *inicio;
     (*inicio) = (*inicio)->siguiente;
     return temporal;
-    //que pasa cuando esta vacio
+    //que pasa cuando esta vacio?
 }
 
 /**
@@ -61,14 +74,14 @@ struct BrazoRobotico* popP(struct BrazoRobotico** inicio){
  * @param d
  * @param p
  */
-struct BrazoRobotico* pushP(struct BrazoRobotico** inicio, int data, int id, int prioridad, int cantidad_pedidos){
+struct BrazoRobotico* pushP(struct BrazoRobotico** inicio, int data, int id, int cantidad_pedidos){
     struct BrazoRobotico* start = (*inicio);
-    struct BrazoRobotico* temp = nuevaCola(data, id, prioridad, cantidad_pedidos);
-    if ((*inicio)->prioridad > prioridad) {
+    struct BrazoRobotico* temp = nuevaCola(data, id, cantidad_pedidos);
+    if ((*inicio)->cantPedidos > cantidad_pedidos) {
         temp->siguiente = *inicio;
         (*inicio) = temp;
     }else{
-        while (start->siguiente != NULL && start->siguiente->prioridad < prioridad) {
+        while (start->siguiente != NULL && start->siguiente->cantPedidos < cantidad_pedidos) {
             start = start->siguiente;
         }
         temp->siguiente = start->siguiente;
@@ -77,13 +90,13 @@ struct BrazoRobotico* pushP(struct BrazoRobotico** inicio, int data, int id, int
     return temp;
 }
 
-void pushBrazo(struct BrazoRobotico** inicio, struct BrazoRobotico *brazo){
+void pushBrazo(struct BrazoRobotico** inicio, struct BrazoRobotico* brazo){
     struct BrazoRobotico* start = (*inicio);
-    if ((*inicio)->prioridad > brazo->prioridad) {
+    if ((*inicio)->cantPedidos > brazo->cantPedidos) {
         brazo->siguiente = *inicio;
         (*inicio) = brazo;
     }else{
-        while (start->siguiente != NULL && start->siguiente->prioridad < brazo->prioridad) {
+        while (start->siguiente != NULL && start->siguiente->cantPedidos < brazo->cantPedidos) {
             start = start->siguiente;
         }
         brazo->siguiente = start->siguiente;
@@ -98,6 +111,14 @@ void pushBrazo(struct BrazoRobotico** inicio, struct BrazoRobotico *brazo){
  */
 int vaciaCola(struct BrazoRobotico** inicio){
     return (*inicio) == NULL;
+}
+
+void imprimirBrazos(struct BrazoRobotico** inicio){
+    while (!vaciaCola(inicio)) {
+        printf("%d, %d,  %d\n", (*inicio)->id, (*inicio)->pendientesItem, (*inicio)->cantPedidos);
+        popP(inicio);
+    }
+
 }
 
 //Prueba de cola de prioridad
