@@ -7,8 +7,6 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <pthread.h>
-//#include "Cola.h"
-//#include "BrazoRobotico.h"
 #include "PedidosLista.h"
 #include "Util.h"
 
@@ -18,39 +16,69 @@ struct Pedidos *pedidos;
 int n_brazos;
 int n_pedidosxbrazo;
 int esquema;
+pthread_mutex_t mutex;
 
 
 void *thread_brazo_robotico(void *arg){
     struct BrazoRobotico *brazo = (struct BrazoRobotico*) arg;
+    //struct Cola* cola = brazo->cola;
+    int brazoiD=brazo->id;
     printf("Brazo con id: %d iniciado.\n", brazo->id);
+    char data[100];
+    memset(data, 0, sizeof(data));
+    int resultado = 2;
+
+    while(resultado != 0){
+        resultado = dequeue(brazo->cola, data, 0);
+        if(resultado == 1 ){
+            printf("brazo %d-%d, Nuevo item recibido:%s \n",brazoiD,brazo->id, data);
+            memset(data, 0, sizeof(data));
+        }else if(resultado == 2){
+            sleep(1);
+        }
+    }
 
     pthread_t thread = pthread_self();
     // procesar datos de hilo
     return NULL;
 }
 
-struct BrazoRobotico * asignarBrazo(struct Pedido* pedido){
+int asignarBrazo(struct Pedido* pedido){
+    pthread_mutex_lock(&mutex);
     struct BrazoRobotico* brazo = popP(&brazosCola);
-    if(brazo->prioridad == PRIORIDAD_ESQUEMA_PRIMERO_OCUPADO){
-        //ya no disponible brazo.
-        //?
-        pushBrazo(&brazosCola, brazo);
-    }
-    if(brazo->cantPedidos > n_pedidosxbrazo){
-        brazo->prioridad = PRIORIDAD_ESQUEMA_PRIMERO_OCUPADO;
+    printf("Pedido sacado de cola:%d,%d\n", brazo->id, brazo->cantPedidos);
+    if(brazo->cantPedidos >= n_pedidosxbrazo){
+        //ya no hay brazos disponibles
         pushBrazo(&brazosCola, brazo);
         //repetir ?
     }else{
         brazo->cantPedidos +=1;
+        pedido->brazo = brazo;
         pushBrazo(&brazosCola, brazo);
-        return brazo;
+        brazo->pendientesItem += pedido->total;
+        /*
+        for (int i = 0; i < n_pedidosxbrazo; i++) {
+            if(brazo->pedidos[i].id == -1){
+                //llenar nuevos datos
+                brazo->pedidos[i].id = pedido->id;
+                brazo->pedidos[i].totalPendientes = pedido->total;
+            }
+            // validar si ya esta llena la cola
+        }*/
+        // aqui debo llenar pedidos min del brazo.
+
+        pthread_mutex_unlock(&mutex);
+        return 1;
     }
-    return NULL;
+    pthread_mutex_unlock(&mutex);
+    return 0;
 }
 
 
 int main(int argc, char *argv[]){
     // verificando ingreso correcto de parametros
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
     if (argc != 4) {
         printf("Usar: %s N_BRAZOS N_PEDIDOSXBRAZO ESQUEMAPLANIFICACION\n", argv[0]);
         exit(1);
@@ -102,6 +130,8 @@ int main(int argc, char *argv[]){
     cola = (struct Cola*)malloc(sizeof(struct Cola));
     cola->primero = NULL;
     cola->final = NULL;
+    cola->contador = 0;
+    //sem_init(&cola->mutex, 0, 1);
     char data[MAX];
 
     //construccion y definicion de los brazos roboticos
@@ -110,14 +140,14 @@ int main(int argc, char *argv[]){
     int estado_hilo;
     if(esquema == ESQUEMA_PRIMERO_DISPONIBLE){
         // SETEAR VALORES A LOS DEMAS ATRIBUTOS DE CADA BRAZO DE LA COLA como cantidad de pedidos
-        brazosCola = nuevaCola(0, 0, PRIORIDAD_ESQUEMA_PRIMERO_DISPONIBLE, n_pedidosxbrazo);
-        estado_hilo = pthread_create(&thread, NULL, thread_brazo_robotico, (void*) brazosCola);
+        brazosCola = nuevaCola(0, 0, n_pedidosxbrazo);
+        estado_hilo = pthread_create(&thread, &attr, thread_brazo_robotico, (void*) brazosCola);
         if (estado_hilo != 0){
             printf("error al crear thread\n");
         }
-        for (int id = 1; id <= n_brazos; id++) {
-            struct BrazoRobotico *t = pushP(&brazosCola, 0, id, PRIORIDAD_ESQUEMA_PRIMERO_DISPONIBLE, n_pedidosxbrazo);
-            estado_hilo = pthread_create(&thread, NULL, thread_brazo_robotico, (void*) t);
+        for (int id = 1; id < n_brazos; id++) {
+            struct BrazoRobotico *t = pushP(&brazosCola, 0, id, n_pedidosxbrazo);
+            estado_hilo = pthread_create(&thread, &attr, thread_brazo_robotico, (void*) t);
             if (estado_hilo != 0){
                 printf("error al crear thread\n");
             }
@@ -130,7 +160,7 @@ int main(int argc, char *argv[]){
 		memset(buffer,0,sizeof(buffer));
 		rc = read(client_sockfd, &buffer,sizeof(buffer));
 		if (rc == 0) break;
-        memset(data, '\0', MAX* sizeof(char));
+        memset(data, 0, sizeof(data));
         sprintf(data,"%s",buffer);
         enqueue(data, cola);
 		printf("[Data = %s rc=%d]\n",buffer,rc);
@@ -145,30 +175,32 @@ int main(int argc, char *argv[]){
     char* elemento;
     int id;
 	while(1){
-        memset(data, '\0', MAX* sizeof(char));
-	    resultado = dequeue(cola, data);
+        memset(data, 0, sizeof(data));
+	    resultado = dequeue(cola, data, 1);
         if(resultado==0) break;
-
-        elemento = strtok(data,"-");
+        char* ptr = data;
+        elemento = strtok_r(ptr, "-", &ptr);
         if(elemento != NULL){
             id = atoi(elemento);
-
             //validar el 0 al finalizar un pedido
             struct Pedido *pedido = find(id, pedidos);
+            //elemento = strtok_r(ptr, "-", &ptr);
             if(pedido != NULL) {
-                printf("Pedido ya registrado: ");
-                //encolar al respectivo brazo
-                printf("(%d,%d) ",pedido->id,pedido->data);
+                printf("Pedido ya registrado: (%d,%s) \n",pedido->id,ptr);
+                sprintf(data,"%d-%s",id,ptr);
+                pthread_mutex_lock(&mutex);
+                if(pedido->brazo == NULL){
+                    // no tiene asignado un brazo
+                    continue;
+                }
                 enqueue(data, pedido->brazo->cola);
-                printf("\n");
-            } else {
-                //setear atributos por defecto
+                pthread_mutex_unlock(&mutex);
+            }else{
+                printf("NUevo Pedido: %d - total) \n",id);
                 pedido = insertarPrimero(id, 1, pedidos);
-                struct BrazoRobotico* brazo = asignarBrazo(pedido);
-                if(brazo == NULL){
-                    // todos ocupados
-                }else{
-                    pedido->brazo = brazo;
+                if( asignarBrazo(pedido) == 0){
+                    // no se pudo asignar pedido.
+                    // debo encolar
                 }
             }
         }else{
@@ -176,7 +208,12 @@ int main(int argc, char *argv[]){
             continue;
         }
 	}
-    imprimir(cola);
+    //imprimir(cola);
+    //
+    while(1){
+        sleep(2);
+
+    }
 	printf("server exiting\n");
     //imprimirLista(pedidos);
 	close(client_sockfd);
