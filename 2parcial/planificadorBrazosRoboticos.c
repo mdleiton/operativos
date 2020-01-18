@@ -42,7 +42,12 @@ void *thread_brazo_robotico(void *arg){
 
 int asignarBrazo(struct Pedido* pedido){
     pthread_mutex_lock(&mutex);
-    struct BrazoRobotico* brazo = popP(&brazosCola);    //deberia volver NULL si hay disponibles// o aqui validar deacuerdo al esquema
+    struct BrazoRobotico* brazo;
+    if(n_brazos == 1){
+        brazo = brazosCola;
+    }else{
+        brazo = popP(&brazosCola);                      //deberia volver NULL si hay disponibles// o aqui validar deacuerdo al esquema
+    }
     if(brazo->cantPedidos >= n_pedidosxbrazo){          //ya no hay brazos disponibles
         brazo->estado = BRAZO_OCUPADO;
         pushBrazo(&brazosCola, brazo, esquema);
