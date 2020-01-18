@@ -96,7 +96,7 @@ int main (int argc, char *argv[])
    int i;
    struct timespec tim, tim2;
    tim.tv_sec = 0;
-   tim.tv_nsec = 500000000L; //medio segundo
+   tim.tv_nsec = 50000000L; //medio segundo
    char buffer[50]; 
    int sockfd;
    int len, rc ;
