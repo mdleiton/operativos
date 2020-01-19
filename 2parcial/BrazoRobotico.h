@@ -20,7 +20,6 @@ struct pedidosMin{
  */
 struct BrazoRobotico {
     int id;
-    int data;
     int pendientesItem;
     int cantPedidos;  // sera mi prioridad
     int estado;
@@ -34,9 +33,8 @@ struct BrazoRobotico {
  * @param data
  * @param prioridad
  * @return    */
-struct BrazoRobotico* nuevaCola(int data, int id, int cantidad_pedidos, int esquema){
+struct BrazoRobotico* nuevaCola(int id, int cantidad_pedidos, int esquema){
     struct BrazoRobotico* temporal = (struct BrazoRobotico*)malloc(sizeof(struct BrazoRobotico));
-    temporal->data = data;
     temporal->id = id;
     temporal->cantPedidos = 0;
     temporal->pendientesItem = 0;
@@ -77,9 +75,9 @@ struct BrazoRobotico* popP(struct BrazoRobotico** inicio){
  * @param d
  * @param p
  */
-struct BrazoRobotico* pushP(struct BrazoRobotico** inicio, int data, int id, int cantidad_pedidos, int esquema){
+struct BrazoRobotico* pushP(struct BrazoRobotico** inicio, int id, int cantidad_pedidos, int esquema){
     struct BrazoRobotico* start = (*inicio);
-    struct BrazoRobotico* temp = nuevaCola(data, id, cantidad_pedidos, esquema);
+    struct BrazoRobotico* temp = nuevaCola(id, cantidad_pedidos, esquema);
     if(esquema == ESQUEMA_IGUAL_X_PEDIDOS) {
         if ((*inicio)->cantPedidos > cantidad_pedidos) {
             temp->siguiente = *inicio;
