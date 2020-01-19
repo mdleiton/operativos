@@ -11,11 +11,17 @@
 #include "Util.h"
 
 struct Cola *cola;
-struct BrazoRobotico *brazosCola;
 struct Pedidos *pedidos;
+pthread_mutex_t mutex_pedidos;
+
+/*
+ * Parámetros de inicialización
+ * */
 int n_brazos;
 int n_pedidosxbrazo;
 int esquema;
+
+struct BrazoRobotico *brazosCola;
 pthread_mutex_t mutex;
 
 void *thread_brazo_robotico(void *arg){
@@ -38,20 +44,32 @@ void *thread_brazo_robotico(void *arg){
                 int totalItems = 0;
                 elemento = strtok_r(ptr, "-", &ptr);
                 while(elemento != NULL){
+                    //que pasa si viene al final de un arreglo grande
                     int items = atoi(elemento);
                     if(items == 0){
-                        printf("Pedido %d finalizado\n", id);
-                        //que pasa si viene al final de un arreglo grande
-
-                        //actualizar estado del pedido
-                        //actualizar cantidad de pedidos asignados a este brazo
+                        printf("Brazo %d | pedido:%d finalizado.\n", brazo->id, id);
+                        pthread_mutex_lock(&mutex_pedidos);
+                        struct Pedido *pedido = find(id, pedidos);
+                        pedido->estado = PEDIDO_FINALIZADO;
+                        // ACTUALIZAR LA DISPONIBILIDAD DE ESTE BRAZO, PARA RECIBIR MAS PEDIDOS.
+                        pthread_mutex_unlock(&mutex_pedidos);
                         break;
                     }else{
                         totalItems+=items;
                     }
                     elemento = strtok_r(ptr, "-", &ptr);
                 }
-                printf("NUEVO ITEM -> Brazo %d | pedido:%d | items agregados :%d  \n", brazo->id, id, totalItems);
+                brazo->pendientesItem-=totalItems;
+                if(totalItems == 0){
+                    continue;
+                }
+                for (int i = 0; i < n_pedidosxbrazo; i++) {
+                    if(brazo->pedidos[i].id == id){
+                        brazo->pedidos[i].totalPendientes -= totalItems;
+                        printf("NUEVO ITEM -> Brazo %d | pedido:%d | items agregados/pendientes :%d/%d  \n",
+                                brazo->id, id, totalItems, brazo->pedidos[i].totalPendientes);
+                    }
+                }
             }
             memset(data, 0, sizeof(data));
         }else if(resultado == 2){
@@ -74,12 +92,15 @@ int asignarBrazo(struct Pedido* pedido){
         pushBrazo(&brazosCola, brazo, esquema);
     }else{
         brazo->cantPedidos += 1;
+        pthread_mutex_lock(&mutex_pedidos);   // ojo
         pedido->brazo = brazo;
         brazo->pendientesItem += pedido->total;
         for (int i = 0; i < n_pedidosxbrazo; i++) {
             if(brazo->pedidos[i].id == -1){
                 brazo->pedidos[i].id = pedido->id;
                 brazo->pedidos[i].totalPendientes = pedido->total;
+                pthread_mutex_unlock(&mutex_pedidos);  // ojo
+                break;
             }
         }
         pushBrazo(&brazosCola, brazo, esquema);
@@ -190,7 +211,9 @@ int main(int argc, char *argv[]){
         elemento = strtok_r(ptr, "-", &ptr);
         if(elemento != NULL){
             id = atoi(elemento);
+            pthread_mutex_lock(&mutex_pedidos);
             struct Pedido *pedido = find(id, pedidos);
+            pthread_mutex_unlock(&mutex_pedidos);
             if(pedido != NULL) {
                 //printf(" planificador-> main, Pedido ya registrado: (%d,%s) \n",pedido->id,ptr);
                 sprintf(data,"%d-%s",id,ptr);
@@ -207,7 +230,9 @@ int main(int argc, char *argv[]){
                 pthread_mutex_unlock(&mutex);
             }else{
                 printf("planificador-> main, Nuevo Pedido: %d - total items:%s. \n",id, ptr);
+                pthread_mutex_lock(&mutex_pedidos);
                 pedido = insertarPrimero(id, atoi(ptr), pedidos);
+                pthread_mutex_unlock(&mutex_pedidos);
                 if( asignarBrazo(pedido) == 0){
                     printf("ERROR: planificador-> main, Intento fallido de asignación de brazo");
                 }
@@ -226,3 +251,12 @@ int main(int argc, char *argv[]){
     return 0;
 }
 // ./eplanificadorBrazosRoboticos 10 2 2
+
+// COSAS A CONSIDERAR
+/*
+    BRAZO FINALIZA UN PEDIDO Y PUEDE SER ASIGNADO OTRO. ACTUALIZAR LISTA DE PEDIDO. PRIMERO ELIMINAR Y LUEGO HACER PUSH
+    BRAZO PASA A SUSPENDIDO: SACAR BRAZO Y LUEGO APUSH . AL HACER PUSH CONSIDERAR EL EL ESTADO SUSPENDIDO PARA MANDARLO AL FINAL
+    BRAZO PASA A INICIAR: SACAR BRAZO Y LUEGO PUSH
+
+
+    */
