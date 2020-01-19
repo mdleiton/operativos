@@ -21,6 +21,9 @@ pthread_mutex_t mutex;
 void *thread_brazo_robotico(void *arg){
     struct BrazoRobotico *brazo = (struct BrazoRobotico*) arg;
     printf("Brazo con id: %d iniciado.\n", brazo->id);
+    pthread_t thread = pthread_self();
+    // asignarlo a un especifico core
+
     char data[100];
     memset(data, 0, sizeof(data));
     int resultado = 2;
@@ -28,15 +31,33 @@ void *thread_brazo_robotico(void *arg){
     while(resultado != 0){
         resultado = dequeue(brazo->cola, data, 0);
         if(resultado == 1 ){
-            printf("brazo %d, Nuevo item recibido:%s \n",brazo->id, data);
+            char* ptr = data;
+            char * elemento = strtok_r(ptr, "-", &ptr);
+            if(elemento != NULL){
+                int id = atoi(elemento);  // id - pedido
+                int totalItems = 0;
+                elemento = strtok_r(ptr, "-", &ptr);
+                while(elemento != NULL){
+                    int items = atoi(elemento);
+                    if(items == 0){
+                        printf("Pedido %d finalizado\n", id);
+                        //que pasa si viene al final de un arreglo grande
+
+                        //actualizar estado del pedido
+                        //actualizar cantidad de pedidos asignados a este brazo
+                        break;
+                    }else{
+                        totalItems+=items;
+                    }
+                    elemento = strtok_r(ptr, "-", &ptr);
+                }
+                printf("NUEVO ITEM -> Brazo %d | pedido:%d | items agregados :%d  \n", brazo->id, id, totalItems);
+            }
             memset(data, 0, sizeof(data));
         }else if(resultado == 2){
             sleep(1);
         }
     }
-    pthread_t thread = pthread_self();
-    //validar el 0 al finalizar un pedido
-    // procesar datos de hilo
     return NULL;
 }
 
@@ -129,13 +150,13 @@ int main(int argc, char *argv[]){
 
     //construcción y definición de los brazos robóticos
     pthread_t thread;
-    brazosCola = nuevaCola(0, 0, n_pedidosxbrazo, esquema);
+    brazosCola = nuevaCola(0, n_pedidosxbrazo, esquema);
     int estado_hilo = pthread_create(&thread, &attr, thread_brazo_robotico, (void*) brazosCola);
     if (estado_hilo != 0){
         printf("Error: planificador-> main, error al crear hilo\n");
     }
     for (int id = 1; id < n_brazos; id++) {
-        struct BrazoRobotico *t = pushP(&brazosCola, 0, id, n_pedidosxbrazo, esquema);
+        struct BrazoRobotico *t = pushP(&brazosCola, id, n_pedidosxbrazo, esquema);
         estado_hilo = pthread_create(&thread, &attr, thread_brazo_robotico, (void*) t);
         if (estado_hilo != 0){
             printf("Error: planificador-> main, error al crear hilo\n");
@@ -186,7 +207,7 @@ int main(int argc, char *argv[]){
                 pthread_mutex_unlock(&mutex);
             }else{
                 printf("planificador-> main, Nuevo Pedido: %d - total items:%s. \n",id, ptr);
-                pedido = insertarPrimero(id, 1, pedidos);
+                pedido = insertarPrimero(id, atoi(ptr), pedidos);
                 if( asignarBrazo(pedido) == 0){
                     printf("ERROR: planificador-> main, Intento fallido de asignación de brazo");
                 }
