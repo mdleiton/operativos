@@ -46,8 +46,8 @@ void enqueue(char valor[MAX], struct Cola *cola){
         cola->primero = nuevo;
         cola->final = nuevo;
     }else{
-        cola->final->siguiente = nuevo;
-        cola->final = cola->final->siguiente;
+        cola->final->siguiente =nuevo;
+        cola->final = nuevo;
     }
 
     cola->contador = cola->contador + 1;
@@ -60,13 +60,16 @@ void enqueue(char valor[MAX], struct Cola *cola){
  * @param cola
  */
 void imprimir(struct Cola *cola){
+    pthread_mutex_lock(&cola->mutex);
+    printf("%d,\n", cola->contador);
     struct elemento *temporal;
     temporal = cola->primero;
-    printf("\n");
     while (temporal != NULL){
         printf("%s.\t", temporal->data);
         temporal = temporal->siguiente;
     }
+    printf("\n");
+    pthread_mutex_unlock(&cola->mutex);
 }
 
 /**
@@ -91,6 +94,9 @@ int dequeue(struct Cola *cola, char data[MAX], int flag){
     struct elemento *temporal;
     temporal = cola->primero;
     cola->primero = cola->primero->siguiente;
+    if(cola->primero == NULL){
+        cola->final = NULL;
+    }
     sprintf(data,"%s", temporal->data);
     free(temporal);
 
