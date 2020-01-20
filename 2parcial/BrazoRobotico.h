@@ -78,7 +78,7 @@ struct BrazoRobotico* popP(struct BrazoRobotico** inicio){
 struct BrazoRobotico* pushP(struct BrazoRobotico** inicio, int id, int cantidad_pedidos, int esquema){
     struct BrazoRobotico* start = (*inicio);
     struct BrazoRobotico* temp = nuevaCola(id, cantidad_pedidos, esquema);
-    if(esquema == ESQUEMA_IGUAL_X_PEDIDOS) {
+    if(esquema == ESQUEMA_IGUAL_X_PEDIDOS || esquema == ESQUEMA_PRIMERO_DISPONIBLE ) {
         if ((*inicio)->cantPedidos > cantidad_pedidos) {
             temp->siguiente = *inicio;
             (*inicio) = temp;
@@ -107,6 +107,66 @@ void pushBrazo(struct BrazoRobotico** inicio, struct BrazoRobotico* brazo, int e
             start->siguiente = brazo;
         }
     }
+}
+
+struct BrazoRobotico* updateBrazo(struct BrazoRobotico** inicio, int id, int esquema){
+    struct BrazoRobotico* start = (*inicio);
+    struct BrazoRobotico* temporal = (*inicio);
+    if(esquema == ESQUEMA_IGUAL_X_PEDIDOS){
+        if ((*inicio)->id == id) {
+            return (*inicio);
+            return;
+        }else{
+            while (start->siguiente != NULL) {
+                if(start->siguiente->id == id){
+                    temporal = start->siguiente;
+                    start->siguiente = temporal->siguiente;
+                    break;
+                }
+                start = start->siguiente;
+            }
+        }
+        struct BrazoRobotico* start2 = (*inicio);
+            while (start2->siguiente != NULL && start2->siguiente->cantPedidos < temporal->cantPedidos) {
+                start2 = start2->siguiente;
+            }
+            temporal->siguiente = start2->siguiente;
+            start2->siguiente = temporal;
+    }
+    return temporal;
+}
+
+
+struct BrazoRobotico* getBrazo(struct BrazoRobotico** inicio, int esquema, int n_pedidos){
+    struct BrazoRobotico* start = (*inicio);
+    if(esquema == ESQUEMA_PRIMERO_DISPONIBLE){
+        if ((*inicio)->cantPedidos < n_pedidos) {
+            return (*inicio);
+        }else{
+            while (start !=NULL) {
+                if(start->cantPedidos < n_pedidos){
+                    return start;
+                }
+                start = start->siguiente;
+            }
+        }
+    }
+    return NULL;
+}
+
+struct Cola* getCola(struct BrazoRobotico** inicio, int id){
+    struct BrazoRobotico* start = (*inicio);
+        if ((*inicio)->id == id) {
+            return (*inicio)->cola;
+        }else{
+            while (start !=NULL) {
+                if(start->id == id){
+                    return start->cola;
+                }
+                start = start->siguiente;
+            }
+    }
+    return NULL;
 }
 
 /**
