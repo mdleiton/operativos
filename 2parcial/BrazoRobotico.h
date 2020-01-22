@@ -29,11 +29,12 @@ struct BrazoRobotico {
 };
 
 /**
- * Función que crear un cola de prioridad
- * @param data
- * @param prioridad
- * @return    */
-struct BrazoRobotico* nuevaCola(int id, int cantidad_pedidos, int esquema){
+ * Función que crea una cola de brazos roboticos
+ * @param id identificador del brazo robotico
+ * @param cantidadPedidos cantidad de pedidos máxima que puede soporta un brazo robotico
+ * @param esquema metodo de funcionamiento y prioridad de la cola
+ * @return  una referencia al nuevo brazo robotico construido  */
+struct BrazoRobotico* nuevaCola(int id, int cantidadPedidos, int esquema){
     struct BrazoRobotico* temporal = (struct BrazoRobotico*)malloc(sizeof(struct BrazoRobotico));
     temporal->id = id;
     temporal->cantPedidos = 0;
@@ -44,8 +45,8 @@ struct BrazoRobotico* nuevaCola(int id, int cantidad_pedidos, int esquema){
     temporal->cola->final = NULL;
     temporal->cola->contador = 0;
 
-    temporal->pedidos = (struct pedidosMin*)malloc(cantidad_pedidos * sizeof(struct pedidosMin));
-    for (int i = 0; i < cantidad_pedidos; i++) {
+    temporal->pedidos = (struct pedidosMin*)malloc(cantidadPedidos * sizeof(struct pedidosMin));
+    for (int i = 0; i < cantidadPedidos; i++) {
         temporal->pedidos[i].id = -1;
         temporal->pedidos[i].totalPendientes = 0;
     }
@@ -56,8 +57,9 @@ struct BrazoRobotico* nuevaCola(int id, int cantidad_pedidos, int esquema){
 }
 
 /**
- * remueve el brazo robótico de más alta prioridad
- * @param brazo
+ * remueve el brazo robótico de más alta prioridad de acuerdo al esquema seleccionado
+ * @param inicio referencia al primer brazo robótico de la cola
+ * return una referencia al brazo robotico de mayor prioridad. Lo saca de la lista.
  */
 struct BrazoRobotico* popP(struct BrazoRobotico** inicio){
     struct BrazoRobotico* temporal = *inicio;
@@ -70,20 +72,21 @@ struct BrazoRobotico* popP(struct BrazoRobotico** inicio){
 }
 
 /**
- * agrega un nuevo Brazo a la cola de prioridad
- * @param head
- * @param d
- * @param p
- */
-struct BrazoRobotico* pushP(struct BrazoRobotico** inicio, int id, int cantidad_pedidos, int esquema){
+ * agrega un nuevo Brazo a la cola
+ * @param inicio referencia al primer brazo robótico de la cola
+ * @param id identificador del brazo robótico
+ * @param cantidadPedidos cantidad de pedidos que puede soportar el brazo robótico
+ * @param esquema una referencia al brazo robotico de mayor prioridad. Lo saca de la lista
+ * @return una referencia al brazo robotico */
+struct BrazoRobotico* pushP(struct BrazoRobotico** inicio, int id, int cantidadPedidos, int esquema){
     struct BrazoRobotico* start = (*inicio);
-    struct BrazoRobotico* temp = nuevaCola(id, cantidad_pedidos, esquema);
+    struct BrazoRobotico* temp = nuevaCola(id, cantidadPedidos, esquema);
     if(esquema == ESQUEMA_IGUAL_X_PEDIDOS || esquema == ESQUEMA_PRIMERO_DISPONIBLE ) {
-        if ((*inicio)->cantPedidos > cantidad_pedidos) {
+        if ((*inicio)->cantPedidos > cantidadPedidos) {
             temp->siguiente = *inicio;
             (*inicio) = temp;
         } else {
-            while (start->siguiente != NULL && start->siguiente->cantPedidos < cantidad_pedidos) {
+            while (start->siguiente != NULL && start->siguiente->cantPedidos < cantidadPedidos) {
                 start = start->siguiente;
             }
             temp->siguiente = start->siguiente;
@@ -93,22 +96,12 @@ struct BrazoRobotico* pushP(struct BrazoRobotico** inicio, int id, int cantidad_
     return temp;
 }
 
-void pushBrazo(struct BrazoRobotico** inicio, struct BrazoRobotico* brazo, int esquema){
-    struct BrazoRobotico* start = (*inicio);
-    if(esquema == ESQUEMA_IGUAL_X_PEDIDOS){
-        if ((*inicio)->cantPedidos > brazo->cantPedidos) {
-            brazo->siguiente = *inicio;
-            (*inicio) = brazo;
-        }else{
-            while (start->siguiente != NULL && start->siguiente->cantPedidos < brazo->cantPedidos) {
-                start = start->siguiente;
-            }
-            brazo->siguiente = start->siguiente;
-            start->siguiente = brazo;
-        }
-    }
-}
-
+/**
+ * actualiza la ubicación de un elemento en la cola
+ * @param inicio referencia al primer brazo robótico de la cola
+ * @param id identificador del brazo robótico
+ * @param esquema una referencia al brazo robotico de mayor prioridad. Lo saca de la lista
+ * @return una referencia al brazo robotico */
 struct BrazoRobotico* updateBrazo(struct BrazoRobotico** inicio, int id, int esquema){
     struct BrazoRobotico* start = (*inicio);
     struct BrazoRobotico* temporal = (*inicio);
@@ -154,49 +147,20 @@ struct BrazoRobotico* getBrazo(struct BrazoRobotico** inicio, int esquema, int n
     return NULL;
 }
 
-struct Cola* getCola(struct BrazoRobotico** inicio, int id){
-    struct BrazoRobotico* start = (*inicio);
-        if ((*inicio)->id == id) {
-            return (*inicio)->cola;
-        }else{
-            while (start !=NULL) {
-                if(start->id == id){
-                    return start->cola;
-                }
-                start = start->siguiente;
-            }
-    }
-    return NULL;
-}
-
 /**
- * Verifica si está vacia la cola de brazo róboticos
- * @param inicio
- * @return
- */
+ * Verifica si está vacia la cola de brazos róboticos
+ * @param inicio referencia al primer brazo robótico de la cola
+ * @return 1 si está vacia la cola. */
 int vaciaCola(struct BrazoRobotico** inicio){
     return (*inicio) == NULL;
 }
 
+/**
+ * imprime por cola todos los brazos robóticos disponibles
+ * @param inicio referencia al primer brazo robótico de la cola */
 void imprimirBrazos(struct BrazoRobotico** inicio){
     while (!vaciaCola(inicio)) {
         printf("%d, %d,  %d\n", (*inicio)->id, (*inicio)->pendientesItem, (*inicio)->cantPedidos);
         popP(inicio);
     }
 }
-
-//Prueba de cola de prioridad
-/*
-int main(){
-    struct BrazoRobotico* pq = nuevaCola(4, 1);
-    push(&pq, 5, 2);
-    push(&pq, 6, 3);
-    push(&pq, 7, 0);
-
-    while (!isEmpty(&pq)) {
-        printf("%d ", pq->data);
-        pop(&pq);
-    }
-    return 0;
-}
- */

@@ -12,7 +12,7 @@
  * Elemento de la cola
  */
 struct elemento{
-    char data[MAX];     // usando en el buffer principal
+    char data[MAX];
     struct elemento *siguiente;
 };
 
@@ -26,13 +26,12 @@ struct Cola{
     int contador;
     struct elemento *primero;
     struct elemento *final;
-
 };
 
 /**
  * Permite agregar un elemento a una cola específica
- * @param elemento que se desea agregar a la cola.
- * @param cola especifica cola a la que se desea agregar el elemento.
+ * @param valor informacion que se desea agregar a la cola.
+ * @param cola especifica la cola a la que se desea agregar el elemento.
  */
 void enqueue(char valor[MAX], struct Cola *cola){
     struct elemento *nuevo = (struct elemento*)malloc(sizeof(struct elemento));
@@ -56,8 +55,8 @@ void enqueue(char valor[MAX], struct Cola *cola){
 }
 
 /**
- * Permite presenta los elementos de una cola
- * @param cola
+ * Permite presentar los elementos de una cola
+ * @param cola especifica la cola a la que se desea imprimir sus elementos.
  */
 void imprimir(struct Cola *cola){
     pthread_mutex_lock(&cola->mutex);
@@ -74,7 +73,10 @@ void imprimir(struct Cola *cola){
 
 /**
  * Permite eliminar un elemento de una cola específica
- * @param cola
+ * @param cola especifica la cola a la que se desea quitar un elemento
+ * @param data aqui se almacenará la información que se saque de la cola.
+ * @flag si es 1 no va esperar por el mutex condicional.
+ * @return
  */
 int dequeue(struct Cola *cola, char data[MAX], int flag){
     pthread_mutex_lock(&cola->mutex);
