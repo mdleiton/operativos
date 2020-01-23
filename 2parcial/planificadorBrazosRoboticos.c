@@ -7,6 +7,9 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <pthread.h>
+#include  <sys/types.h>
+#include  <sys/ipc.h>
+#include  <sys/shm.h>
 #include "PedidosLista.h"
 
 struct Cola *cola;
@@ -25,6 +28,10 @@ pthread_mutex_t mutexInformacion;
 
 struct BrazoRobotico *brazosCola;
 pthread_mutex_t mutex;
+
+/* Estructura que contiene la informacion de los pid de los procesos */
+struct Proceso* procesos;
+int mcID;
 
 void *thread_brazo_robotico(void *arg){
     struct BrazoRobotico *brazo = (struct BrazoRobotico*) arg;
@@ -144,10 +151,39 @@ int asignarBrazo(struct Pedido** pedido){
         }
     }
 
+
+/*
+ *  Función que finaliza adecuadamente el proceso.
+ */
+void finalizar(){
+    long pid = syscall(SYS_gettid);
+    procesos->pidPlanificador = -1;
+    sem_destroy(&procesos->mutex);
+    shmdt((void *) procesos);
+    printf("planificador -> finilizar, liberar memoria compartido\n");
+    shmctl(mcID, IPC_RMID, NULL);
+    printf("planificador -> finilizar, memoria copartida a sido eliminada.\n");
+    exit(1);
+}
+
+/*
+ *  Función que maneja la señal SIGINT. Notifica su finalización al proceso resultado en caso de estar ejecutándose.
+ */
+void manejadorSIGINT(int signum, siginfo_t *info, void *ptr){
+    // envio de señal a otro proceso para notificar que ha finalizado este proceso.
+    int send = enviarSenal(procesos->pidGenerador, 1, EXITPROGRAMA_PLANIFICADOR);
+    if(send != 0){
+        printf("ERROR: planificador -> manejadorSIGINT, No se pudo comunicar con proceso. \n");
+    }
+    finalizar();  // finaliza debidamente
+}
+
+
 int main(int argc, char *argv[]){
     // verificando ingreso correcto de parámetros
     pthread_attr_t attr;
     pthread_attr_init(&attr);
+
     if (argc != 4) {
         printf("Usar: %s N_BRAZOS N_PEDIDOSXBRAZO ESQUEMAPLANIFICACION\n", argv[0]);
         exit(1);
@@ -167,6 +203,34 @@ int main(int argc, char *argv[]){
         printf("Error: planificador-> main, Parámetro ESQUEMAPLANIFICACION inválido.\n");
         exit(1);
     }
+
+    // acceso a memoria compartida.
+    mcID = shmget(ID_MC, sizeof(struct Proceso), IPC_CREAT | 0666);
+    if (mcID < 0) {
+        printf("Error: planificador -> main, Inválido identificador de memoria compartido.\n");
+        exit(1);
+    }
+    printf("planificador -> main, Se Obtuvo un válido identificador de memoria compartido.\n");
+
+    procesos = (struct Proceso *) shmat(mcID, NULL, 0);
+    if ((int) procesos == -1) {
+        printf("Error: cargadorDatos->main, shmat error.\n");
+        exit(1);
+    }
+    sem_init(&procesos->mutex, 0, 1);
+    printf("planificador -> main, Mapeo a memoria compartida aceptada.\n");
+    sem_wait(&procesos->mutex);
+    procesos->pidPlanificador = syscall(SYS_gettid);
+    procesos->pidGenerador = -1;
+    int send = enviarSenal(procesos->pidGenerador, 1, INITPROGRAMA_PLANIFICADOR); // notificar a proceso generador que se esta ejecutando.
+    sem_post(&procesos->mutex);
+
+    // manejadores de senales.
+    struct sigaction act;
+    memset(&act, 0, sizeof(act));
+    act.sa_sigaction = manejadorSIGINT;
+    act.sa_flags = SIGINT;
+    sigaction(SIGINT, &act, NULL);
 
     // Obtiene los pedidos por socket
 	int server_sockfd, client_sockfd;
@@ -207,15 +271,16 @@ int main(int argc, char *argv[]){
     brazosCola = nuevaCola(1, n_pedidosxbrazo, esquema);
     int estado_hilo = pthread_create(&thread, &attr, thread_brazo_robotico, (void*) brazosCola);
     if (estado_hilo != 0){
-        printf("Error: planificador-> main, error al crear hilo\n");
+        printf("Error: planificador-> main, error al crear hilo.\n");
     }
     for (int id = 2; id <= n_brazos; id++) {
         struct BrazoRobotico *t = pushP(&brazosCola, id, n_pedidosxbrazo, esquema);
         estado_hilo = pthread_create(&thread, &attr, thread_brazo_robotico, (void*) t);
         if (estado_hilo != 0){
-            printf("Error: planificador-> main, error al crear hilo\n");
+            printf("Error: planificador-> main, error al crear hilo.\n");
         }
     }
+
     // recibiendo pedidos
 	while(1){
 		memset(buffer,0,sizeof(buffer));
@@ -227,7 +292,7 @@ int main(int argc, char *argv[]){
 		//printf("[Data = %s rc=%d]\n",buffer,rc);
 	}
 
-	// desencolando mensajes. esto debe ir en otro hilo
+    // definiendo la lista para almacenar los pedidos que lleguen
     pedidos = (struct Pedidos*)malloc(sizeof(struct Pedidos));
     pedidos->primero = NULL;
     pedidos->final = NULL;
@@ -236,6 +301,7 @@ int main(int argc, char *argv[]){
     informacion = (struct Informacion*)malloc(sizeof(struct Informacion));
     informacion->pedidosFinalizados = 0;
 
+    // desencolando mensajes. esto debe ir en otro hilo
     int resultado;
     char* elemento;
     int id;
