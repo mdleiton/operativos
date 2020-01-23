@@ -25,3 +25,10 @@
  * */
 #define PEDIDO_PARCIAL 1
 #define PEDIDO_FINALIZADO 2
+
+/**
+ * Estructura de información del sisteam
+ */
+struct Informacion{
+    int pedidosFinalizados;
+};
