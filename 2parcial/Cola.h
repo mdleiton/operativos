@@ -85,10 +85,6 @@ int dequeue(struct Cola *cola, char data[MAX], int flag){
             pthread_mutex_unlock(&cola->mutex);
             return 0;
         }
-        while(cola->contador == 0)
-            pthread_cond_wait(&cola->non_zero_item, &cola->mutex);
-        pthread_mutex_unlock(&cola->mutex);
-        return 2;
     }
 
     while(cola->contador == 0)
@@ -102,7 +98,7 @@ int dequeue(struct Cola *cola, char data[MAX], int flag){
     sprintf(data,"%s", temporal->data);
     free(temporal);
 
-    cola->contador = cola->contador -1;
+    cola->contador = cola->contador - 1;
     pthread_mutex_unlock(&cola->mutex);
     return 1;
 }
