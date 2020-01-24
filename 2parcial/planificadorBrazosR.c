@@ -7,9 +7,9 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <pthread.h>
-#include  <sys/types.h>
-#include  <sys/ipc.h>
-#include  <sys/shm.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 #include "PedidosLista.h"
 
 struct Cola *cola;
@@ -17,23 +17,26 @@ struct Pedidos *pedidos;
 pthread_mutex_t mutex_pedidos;
 
 /**
- * Parámetros de inicialización
- **/
+ * Parámetros de inicialización */
 int n_brazos;
 int n_pedidosxbrazo;
 int esquema;
 
-struct Informacion *informacion;
-
 struct BrazoRobotico *brazosCola;
 pthread_mutex_t mutex;
 
-/** Estructura que contiene la informacion de los pid de los procesos */
+/**
+ * Estructura que son compartidas entre procesos */
+struct Informacion *informacion;
 struct Proceso* procesos;
-int mcID;
 int mcID2;
+int mcID;
 
-void *thread_brazo_robotico(void *arg){
+int client_sockfd;
+
+/**
+ * rutina a ejecutarse por cada hilo de brazo robótico que se inicie */
+void *threadBrazoRobotico(void *arg){
     struct BrazoRobotico *brazo = (struct BrazoRobotico*) arg;
     printf("Brazo con id: %d iniciado.\n", brazo->id);
     pthread_t thread = pthread_self();
@@ -122,6 +125,55 @@ void *thread_brazo_robotico(void *arg){
     return NULL;
 }
 
+/**
+ * rutina a ejecutarse para recibir nuevos paquetes desde el socket. */
+void *threadRecepcionPaquetes(void *arg){
+    int server_sockfd;
+    int server_len;
+    int rc;
+    unsigned client_len;
+    struct sockaddr_in server_address;
+    struct sockaddr_in client_address;
+    char buffer[50], data[MAX_BUFFER];
+
+    //Remove any old socket and create an unnamed socket for the server.
+    server_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    server_address.sin_family = AF_INET;
+    server_address.sin_addr.s_addr = htons(INADDR_ANY);
+    server_address.sin_port = htons(7734);
+    server_len = sizeof(server_address);
+
+    rc = bind(server_sockfd, (struct sockaddr *) &server_address, server_len);
+    printf("RC from bind = %d\n", rc );
+
+    //Create a connection queue and wait for clients
+    rc = listen(server_sockfd, 50);
+    printf("RC from listen = %d\n", rc );
+
+    client_len = sizeof(client_address);
+    client_sockfd = accept(server_sockfd, (struct sockaddr *) &client_address, &client_len);
+    printf("after accept()... client_sockfd = %d\n", client_sockfd);
+
+    // recibiendo pedidos
+    while(1){
+        memset(buffer,0,sizeof(buffer));
+        rc = read(client_sockfd, &buffer,sizeof(buffer));
+        if (rc == 0) break;
+        memset(data, 0, sizeof(data));
+        sprintf(data,"%s",buffer);
+        enqueue(data, cola);
+        //printf("[Data = %s rc=%d]\n",buffer,rc);
+        // se puede tratar de asignar de una un brazo robotico
+    }
+    printf("Finalizando hilos de recepción de nuevos paquetes.");
+    return NULL;
+}
+
+/**
+ * Función que se encarga de asignarle a un pedido un brazo robótico disponible
+ * @param pedido pedido al cual se le desea asignar un brazo robótico
+ * @return 1 en caso de que exista brazo robótico disponible.
+ */
 int asignarBrazo(struct Pedido** pedido){
     pthread_mutex_lock(&mutex);
     struct BrazoRobotico* brazo = getBrazo(&brazosCola, esquema, n_pedidosxbrazo);
@@ -142,15 +194,14 @@ int asignarBrazo(struct Pedido** pedido){
         }
         printf("planificador-> main, Nuevo Pedido: %d | total items:%d | asignado a brazo %d\n", (*pedido)->id,
                (*pedido)->total, brazo->id);
-        pthread_mutex_unlock(&mutex_pedidos);  // ojo
+        pthread_mutex_unlock(&mutex_pedidos);
         pthread_mutex_unlock(&mutex);
         return 1;
     }
 }
 
 /**
- *  Función que finaliza adecuadamente el proceso.
- */
+ *  Función que finaliza adecuadamente el proceso. */
 void finalizar(){
     procesos->pidPlanificador = -1;
     sem_destroy(&procesos->mutex);
@@ -165,37 +216,32 @@ void finalizar(){
 }
 
 /**
- *  Función que maneja la señal SIGINT. Notifica su finalización al proceso admin en caso de estar ejecutándose.
- */
+ *  Función que maneja la señal SIGINT. Notifica su finalización al proceso admin en caso de estar ejecutándose. */
 void manejadorSIGINT(int signum, siginfo_t *info, void *ptr){
     enviarSenal(procesos->pidAdmin, 1, EXITPROGRAMA_PLANIFICADOR);
     finalizar();  // finaliza debidamente
 }
 
 /**
- *  Función que maneja la señal CREAR_BRAZO.
- */
+ *  Función que maneja la señal CREAR_BRAZO. */
 void manejadorSIGCREAR_BRAZO(int signum, siginfo_t *info, void *ptr){
     printf("manejadorSIGCREAR_BRAZO, señal recibida para crear nuevo brazo.");
 }
 
 /**
- *  Función que maneja la señal SUSPENDER_BRAZO.
- */
+ *  Función que maneja la señal SUSPENDER_BRAZO. */
 void manejadorSIGSUSPENDER_BRAZO(int signum, siginfo_t *info, void *ptr){
     printf("manejadorSIGSUSPENDER_BRAZO, señal recibida para suspender el brazo xx.");
 }
 
 /**
- *  Función que maneja la señal REANUDAR_BRAZO.
- */
+ *  Función que maneja la señal REANUDAR_BRAZO. */
 void manejadorSIGREANUDAR_BRAZO(int signum, siginfo_t *info, void *ptr){
     printf("manejadorSIGSUSPENDER_BRAZO, señal recibida para reanudar el brazo xx.");
 }
 
 /**
- *  Función que maneja la señal EXITPROGRAMA_ADMIN.
- */
+ *  Función que maneja la señal EXITPROGRAMA_ADMIN. */
 void manejadorSIGEXITPROGRAMA_ADMIN(int signum, siginfo_t *info, void *ptr){
     printf("manejadorSIGEXITPROGRAMA_ADMIN, señal recibida para finalizar.");
 }
@@ -290,7 +336,8 @@ int main(int argc, char *argv[]){
     cola->primero = NULL;
     cola->final = NULL;
     cola->contador = 0;
-    char data[MAX];
+    pthread_mutex_init(&cola->mutex, NULL);
+
 
     // definiendo la lista para almacenar los pedidos que lleguen
     pedidos = (struct Pedidos*)malloc(sizeof(struct Pedidos));
@@ -302,60 +349,28 @@ int main(int argc, char *argv[]){
     pthread_attr_init(&attr);
     pthread_t thread;
     brazosCola = nuevaCola(1, n_pedidosxbrazo, esquema);
-    int estado_hilo = pthread_create(&thread, &attr, thread_brazo_robotico, (void*) brazosCola);
+    int estado_hilo = pthread_create(&thread, &attr, threadBrazoRobotico, (void*) brazosCola);
     if (estado_hilo != 0){
         printf("Error: planificador-> main, error al crear hilo.\n");
     }
     for (int id = 2; id <= n_brazos; id++) {
         struct BrazoRobotico *t = pushP(&brazosCola, id, n_pedidosxbrazo, esquema);
-        estado_hilo = pthread_create(&thread, &attr, thread_brazo_robotico, (void*) t);
+        estado_hilo = pthread_create(&thread, &attr, threadBrazoRobotico, (void*) t);
         if (estado_hilo != 0){
             printf("Error: planificador-> main, error al crear hilo.\n");
         }
     }
 
     // Obtiene los pedidos por socket
-	int server_sockfd, client_sockfd;
-	int server_len;
-	int rc;
-	unsigned client_len;
-	struct sockaddr_in server_address;
-	struct sockaddr_in client_address;
-	char buffer[50]; 
-
-	//Remove any old socket and create an unnamed socket for the server.
-	server_sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	server_address.sin_family = AF_INET;
-	server_address.sin_addr.s_addr = htons(INADDR_ANY);
-	server_address.sin_port = htons(7734) ; 
-	server_len = sizeof(server_address);
-
-	rc = bind(server_sockfd, (struct sockaddr *) &server_address, server_len);
-	printf("RC from bind = %d\n", rc ) ; 
-	
-	//Create a connection queue and wait for clients
-	rc = listen(server_sockfd, 50);
-	printf("RC from listen = %d\n", rc ) ; 
-
-	client_len = sizeof(client_address);
-	client_sockfd = accept(server_sockfd, (struct sockaddr *) &client_address, &client_len);
-	printf("after accept()... client_sockfd = %d\n", client_sockfd);
-
-    // recibiendo pedidos
-	while(1){
-		memset(buffer,0,sizeof(buffer));
-		rc = read(client_sockfd, &buffer,sizeof(buffer));
-		if (rc == 0) break;
-        memset(data, 0, sizeof(data));
-        sprintf(data,"%s",buffer);
-        enqueue(data, cola);
-		//printf("[Data = %s rc=%d]\n",buffer,rc);
-	}
+    estado_hilo = pthread_create(&thread, &attr, threadRecepcionPaquetes, NULL);
+    if (estado_hilo != 0){
+        printf("Error: planificador-> main, error al crear hilo.\n");
+    }
 
     // desencolando mensajes. esto debe ir en otro hilo
-    int resultado;
     char* elemento;
-    int id;
+    int id, resultado;
+    char data[MAX_BUFFER];
 	while(1){
         memset(data, 0, sizeof(data));
 	    resultado = dequeue(cola, data, 0);
