@@ -44,6 +44,7 @@
 
 #define ID_MC 124
 #define ID_MC_INFO 224
+#define MAX_BUFFER 100
 
 /**
  * Estructura de información del sisteam

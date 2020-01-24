@@ -25,8 +25,7 @@ int mcID;
 int mcID2;
 
 /**
- *  Función que finaliza adecuadamente el proceso.
- */
+ *  Función que finaliza adecuadamente el proceso. */
 void finalizar(){
     procesos->pidAdmin = -1;
     sem_destroy(&procesos->mutex);
@@ -40,16 +39,14 @@ void finalizar(){
 }
 
 /**
- *  Función que maneja la señal SIGINT. Notifica su finalización al proceso resultado en caso de estar ejecutándose.
- */
+ *  Función que maneja la señal SIGINT. Notifica su finalización al proceso resultado en caso de estar ejecutándose. */
 void manejadorSIGINT(int signum, siginfo_t *info, void *ptr){
     enviarSenal(procesos->pidPlanificador, 1, EXITPROGRAMA_ADMIN);
     finalizar();  // finaliza debidamente
 }
 
 /**
- *  Función que maneja la señal que indica que el proceso planificacion acabo de finalizar.
- */
+ *  Función que maneja la señal que indica que el proceso planificacion acabo de finalizar */
 void manejadorEXITPLANIFICADOR(int signum, siginfo_t *info, void *ptr){
     printf("\nadmin -> El proceso planificacion acabo de finalizar\n");
     //finalizar();  // finaliza debidamente
