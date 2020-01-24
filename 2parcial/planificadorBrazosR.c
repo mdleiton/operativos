@@ -16,22 +16,22 @@ struct Cola *cola;
 struct Pedidos *pedidos;
 pthread_mutex_t mutex_pedidos;
 
-/*
+/**
  * Parámetros de inicialización
- * */
+ **/
 int n_brazos;
 int n_pedidosxbrazo;
 int esquema;
 
 struct Informacion *informacion;
-pthread_mutex_t mutexInformacion;
 
 struct BrazoRobotico *brazosCola;
 pthread_mutex_t mutex;
 
-/* Estructura que contiene la informacion de los pid de los procesos */
+/** Estructura que contiene la informacion de los pid de los procesos */
 struct Proceso* procesos;
 int mcID;
+int mcID2;
 
 void *thread_brazo_robotico(void *arg){
     struct BrazoRobotico *brazo = (struct BrazoRobotico*) arg;
@@ -40,18 +40,16 @@ void *thread_brazo_robotico(void *arg){
     // asignarlo a un especifico core
 
     char data[100];
-    int resultado = 2;
     char* elemento;
-    int id;
-    int totalItems;
+    int id, totalItems, resultado = 2;
     while(resultado != 0){
         memset(data, 0, sizeof(data));
         resultado = dequeue(brazo->cola, data, 0);
-        if(resultado == 1 ){
+        if(resultado == 1){
             char* ptr = data;
             elemento = strtok_r(ptr, "-", &ptr);
             if(elemento != NULL){
-                id = atoi(elemento);  // id - pedido
+                id = atoi(elemento);
                 totalItems = 0;
                 elemento = strtok_r(ptr, "-", &ptr);
                 while(elemento != NULL){
@@ -61,6 +59,7 @@ void *thread_brazo_robotico(void *arg){
                         for (int i = 0; i < n_pedidosxbrazo; i++) {
                             if (brazo->pedidos[i].id == id) {
                                 brazo->pedidos[i].totalPendientes -= totalItems;
+
                                 pthread_mutex_lock(&mutex);
                                 brazo->pendientesItem-=totalItems;
                                 totalItems = 0;
@@ -72,7 +71,7 @@ void *thread_brazo_robotico(void *arg){
                                     brazo->pedidos[i].id = -1;
                                     brazo->pedidos[i].totalPendientes = 0;
                                     pthread_mutex_unlock(&mutex);
-                                    ingreso = 1;
+
                                     pthread_mutex_lock(&mutex_pedidos);
                                     struct Pedido *pedido = find(id, pedidos);
                                     pedido->estado = PEDIDO_FINALIZADO;
@@ -80,17 +79,18 @@ void *thread_brazo_robotico(void *arg){
                                     delete(id, pedidos);
                                     pthread_mutex_unlock(&mutex_pedidos);
 
-                                    pthread_mutex_lock(&mutexInformacion);
+                                    sem_wait(&informacion->mutex);
                                     informacion->pedidosFinalizados++;
-                                    pthread_mutex_unlock(&mutexInformacion);
+                                    sem_post(&informacion->mutex);
+                                    ingreso = 1;
                                     break;
                                 }else{
-                                    ingreso = 2;
                                     pthread_mutex_unlock(&mutex);
                                     char rest[100];
                                     memset(rest, 0, sizeof(rest));
                                     sprintf(rest,"%d-0",id);
                                     enqueue(rest, brazo->cola);
+                                    ingreso = 2;
                                     break;
                                 }
                             }
@@ -117,9 +117,6 @@ void *thread_brazo_robotico(void *arg){
                     }
                 }
             }
-        }else if(resultado == 2){
-            // debo sacarlo despues
-            sleep(1);
         }
     }
     return NULL;
@@ -132,58 +129,79 @@ int asignarBrazo(struct Pedido** pedido){
         pthread_mutex_unlock(&mutex);
         return 0;
     }else{
-            brazo->cantPedidos += 1;
-            pthread_mutex_lock(&mutex_pedidos);
-            (*pedido)->brazo = brazo;
-            brazo->pendientesItem += (*pedido)->total;
-            for (int i = 0; i < n_pedidosxbrazo; i++) {
-                if (brazo->pedidos[i].id == -1) {
-                    brazo->pedidos[i].id = (*pedido)->id;
-                    brazo->pedidos[i].totalPendientes = (*pedido)->total;
-                    break;
-                }
+        brazo->cantPedidos += 1;
+        pthread_mutex_lock(&mutex_pedidos);
+        (*pedido)->brazo = brazo;
+        brazo->pendientesItem += (*pedido)->total;
+        for (int i = 0; i < n_pedidosxbrazo; i++) {
+            if (brazo->pedidos[i].id == -1) {
+                brazo->pedidos[i].id = (*pedido)->id;
+                brazo->pedidos[i].totalPendientes = (*pedido)->total;
+                break;
             }
-            printf("planificador-> main, Nuevo Pedido: %d | total items:%d | asignado a brazo %d\n", (*pedido)->id,
-                   (*pedido)->total, brazo->id);
-            pthread_mutex_unlock(&mutex_pedidos);  // ojo
-            pthread_mutex_unlock(&mutex);
-            return 1;
         }
+        printf("planificador-> main, Nuevo Pedido: %d | total items:%d | asignado a brazo %d\n", (*pedido)->id,
+               (*pedido)->total, brazo->id);
+        pthread_mutex_unlock(&mutex_pedidos);  // ojo
+        pthread_mutex_unlock(&mutex);
+        return 1;
     }
+}
 
-
-/*
+/**
  *  Función que finaliza adecuadamente el proceso.
  */
 void finalizar(){
-    long pid = syscall(SYS_gettid);
     procesos->pidPlanificador = -1;
     sem_destroy(&procesos->mutex);
     shmdt((void *) procesos);
-    printf("planificador -> finilizar, liberar memoria compartido\n");
     shmctl(mcID, IPC_RMID, NULL);
-    printf("planificador -> finilizar, memoria copartida a sido eliminada.\n");
+
+    sem_destroy(&informacion->mutex);
+    shmdt((void *) informacion);
+    shmctl(mcID2, IPC_RMID, NULL);
+    printf("planificador -> finalizar, memorias compartidas han sido eliminadas.\n");
     exit(1);
 }
 
-/*
- *  Función que maneja la señal SIGINT. Notifica su finalización al proceso resultado en caso de estar ejecutándose.
+/**
+ *  Función que maneja la señal SIGINT. Notifica su finalización al proceso admin en caso de estar ejecutándose.
  */
 void manejadorSIGINT(int signum, siginfo_t *info, void *ptr){
-    // envio de señal a otro proceso para notificar que ha finalizado este proceso.
-    int send = enviarSenal(procesos->pidGenerador, 1, EXITPROGRAMA_PLANIFICADOR);
-    if(send != 0){
-        printf("ERROR: planificador -> manejadorSIGINT, No se pudo comunicar con proceso. \n");
-    }
+    enviarSenal(procesos->pidAdmin, 1, EXITPROGRAMA_PLANIFICADOR);
     finalizar();  // finaliza debidamente
 }
 
+/**
+ *  Función que maneja la señal CREAR_BRAZO.
+ */
+void manejadorSIGCREAR_BRAZO(int signum, siginfo_t *info, void *ptr){
+    printf("manejadorSIGCREAR_BRAZO, señal recibida para crear nuevo brazo.");
+}
+
+/**
+ *  Función que maneja la señal SUSPENDER_BRAZO.
+ */
+void manejadorSIGSUSPENDER_BRAZO(int signum, siginfo_t *info, void *ptr){
+    printf("manejadorSIGSUSPENDER_BRAZO, señal recibida para suspender el brazo xx.");
+}
+
+/**
+ *  Función que maneja la señal REANUDAR_BRAZO.
+ */
+void manejadorSIGREANUDAR_BRAZO(int signum, siginfo_t *info, void *ptr){
+    printf("manejadorSIGSUSPENDER_BRAZO, señal recibida para reanudar el brazo xx.");
+}
+
+/**
+ *  Función que maneja la señal EXITPROGRAMA_ADMIN.
+ */
+void manejadorSIGEXITPROGRAMA_ADMIN(int signum, siginfo_t *info, void *ptr){
+    printf("manejadorSIGEXITPROGRAMA_ADMIN, señal recibida para finalizar.");
+}
 
 int main(int argc, char *argv[]){
     // verificando ingreso correcto de parámetros
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-
     if (argc != 4) {
         printf("Usar: %s N_BRAZOS N_PEDIDOSXBRAZO ESQUEMAPLANIFICACION\n", argv[0]);
         exit(1);
@@ -204,26 +222,41 @@ int main(int argc, char *argv[]){
         exit(1);
     }
 
-    // acceso a memoria compartida.
+    // Acceso a memoria compartida que contiene los PID de los procesos.
     mcID = shmget(ID_MC, sizeof(struct Proceso), IPC_CREAT | 0666);
     if (mcID < 0) {
         printf("Error: planificador -> main, Inválido identificador de memoria compartido.\n");
         exit(1);
     }
-    printf("planificador -> main, Se Obtuvo un válido identificador de memoria compartido.\n");
-
     procesos = (struct Proceso *) shmat(mcID, NULL, 0);
     if ((int) procesos == -1) {
-        printf("Error: cargadorDatos->main, shmat error.\n");
+        printf("Error: planificador->main, shmat error.\n");
         exit(1);
     }
     sem_init(&procesos->mutex, 0, 1);
-    printf("planificador -> main, Mapeo a memoria compartida aceptada.\n");
     sem_wait(&procesos->mutex);
     procesos->pidPlanificador = syscall(SYS_gettid);
     procesos->pidGenerador = -1;
-    int send = enviarSenal(procesos->pidGenerador, 1, INITPROGRAMA_PLANIFICADOR); // notificar a proceso generador que se esta ejecutando.
+    procesos->pidAdmin = -1;
     sem_post(&procesos->mutex);
+
+    //Acceso a memoria compartida que contiene informacion general a compartir.
+    mcID2 = shmget(ID_MC_INFO, sizeof(struct Informacion), IPC_CREAT | 0666);
+    if (mcID2 < 0) {
+        printf("Error: planificador -> main, Inválido identificador de memoria compartido.\n");
+        exit(1);
+    }
+    informacion = (struct Informacion*) shmat(mcID2, NULL, 0);
+    if ((int) informacion == -1) {
+        printf("Error: planificador->main, shmat error.\n");
+        exit(1);
+    }
+    sem_init(&informacion->mutex, 0, 1);
+    sem_wait(&informacion->mutex);
+    informacion->pedidosFinalizados = 0;
+    informacion->brazosActivos = n_brazos;
+    informacion->brazosSuspendidos = 0;
+    sem_post(&informacion->mutex);
 
     // manejadores de senales.
     struct sigaction act;
@@ -231,6 +264,55 @@ int main(int argc, char *argv[]){
     act.sa_sigaction = manejadorSIGINT;
     act.sa_flags = SIGINT;
     sigaction(SIGINT, &act, NULL);
+
+    memset(&act, 0, sizeof(act));
+    act.sa_sigaction = manejadorSIGCREAR_BRAZO;
+    act.sa_flags = CREAR_BRAZO | SA_SIGINFO;
+    sigaction(CREAR_BRAZO, &act, NULL);
+
+    memset(&act, 0, sizeof(act));
+    act.sa_sigaction = manejadorSIGSUSPENDER_BRAZO;
+    act.sa_flags = SUSPENDER_BRAZO | SA_SIGINFO;
+    sigaction(SUSPENDER_BRAZO, &act, NULL);
+
+    memset(&act, 0, sizeof(act));
+    act.sa_sigaction = manejadorSIGREANUDAR_BRAZO;
+    act.sa_flags = REANUDAR_BRAZO | SA_SIGINFO;
+    sigaction(REANUDAR_BRAZO, &act, NULL);
+
+    memset(&act, 0, sizeof(act));
+    act.sa_sigaction = manejadorSIGEXITPROGRAMA_ADMIN;
+    act.sa_flags = EXITPROGRAMA_ADMIN | SA_SIGINFO;
+    sigaction(EXITPROGRAMA_ADMIN, &act, NULL);
+
+    // definiendo la cola para almacenar los pedidos que lleguen
+    cola = (struct Cola*)malloc(sizeof(struct Cola));
+    cola->primero = NULL;
+    cola->final = NULL;
+    cola->contador = 0;
+    char data[MAX];
+
+    // definiendo la lista para almacenar los pedidos que lleguen
+    pedidos = (struct Pedidos*)malloc(sizeof(struct Pedidos));
+    pedidos->primero = NULL;
+    pedidos->final = NULL;
+
+    //construcción y definición de los brazos robóticos
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_t thread;
+    brazosCola = nuevaCola(1, n_pedidosxbrazo, esquema);
+    int estado_hilo = pthread_create(&thread, &attr, thread_brazo_robotico, (void*) brazosCola);
+    if (estado_hilo != 0){
+        printf("Error: planificador-> main, error al crear hilo.\n");
+    }
+    for (int id = 2; id <= n_brazos; id++) {
+        struct BrazoRobotico *t = pushP(&brazosCola, id, n_pedidosxbrazo, esquema);
+        estado_hilo = pthread_create(&thread, &attr, thread_brazo_robotico, (void*) t);
+        if (estado_hilo != 0){
+            printf("Error: planificador-> main, error al crear hilo.\n");
+        }
+    }
 
     // Obtiene los pedidos por socket
 	int server_sockfd, client_sockfd;
@@ -259,28 +341,6 @@ int main(int argc, char *argv[]){
 	client_sockfd = accept(server_sockfd, (struct sockaddr *) &client_address, &client_len);
 	printf("after accept()... client_sockfd = %d\n", client_sockfd);
 
-	// definiendo la cola para almacenar los pedidos que lleguen
-    cola = (struct Cola*)malloc(sizeof(struct Cola));
-    cola->primero = NULL;
-    cola->final = NULL;
-    cola->contador = 0;
-    char data[MAX];
-
-    //construcción y definición de los brazos robóticos
-    pthread_t thread;
-    brazosCola = nuevaCola(1, n_pedidosxbrazo, esquema);
-    int estado_hilo = pthread_create(&thread, &attr, thread_brazo_robotico, (void*) brazosCola);
-    if (estado_hilo != 0){
-        printf("Error: planificador-> main, error al crear hilo.\n");
-    }
-    for (int id = 2; id <= n_brazos; id++) {
-        struct BrazoRobotico *t = pushP(&brazosCola, id, n_pedidosxbrazo, esquema);
-        estado_hilo = pthread_create(&thread, &attr, thread_brazo_robotico, (void*) t);
-        if (estado_hilo != 0){
-            printf("Error: planificador-> main, error al crear hilo.\n");
-        }
-    }
-
     // recibiendo pedidos
 	while(1){
 		memset(buffer,0,sizeof(buffer));
@@ -291,15 +351,6 @@ int main(int argc, char *argv[]){
         enqueue(data, cola);
 		//printf("[Data = %s rc=%d]\n",buffer,rc);
 	}
-
-    // definiendo la lista para almacenar los pedidos que lleguen
-    pedidos = (struct Pedidos*)malloc(sizeof(struct Pedidos));
-    pedidos->primero = NULL;
-    pedidos->final = NULL;
-
-    // informacion del sistema
-    informacion = (struct Informacion*)malloc(sizeof(struct Informacion));
-    informacion->pedidosFinalizados = 0;
 
     // desencolando mensajes. esto debe ir en otro hilo
     int resultado;
@@ -334,7 +385,7 @@ int main(int argc, char *argv[]){
                 }
             }
         }else{
-            printf("ERROR: planificador-> main, Incorrecto formato.\n");
+            printf("ERROR: planificador-> main, Formato Incorrecto.\n");
             continue;
         }
 	}
@@ -342,8 +393,9 @@ int main(int argc, char *argv[]){
     while(1){
         sleep(2);
     }
-    imprimirLista(pedidos);
     close(client_sockfd);
     return 0;
 }
-// ./eplanificadorBrazosRoboticos 10 2 2
+
+/* necesito crear hilos que encolen la informacion y dejar al hilo principal que reciba senales.
+ * no puede esperar mucho esperar en bind del socket.*/
