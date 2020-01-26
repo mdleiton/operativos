@@ -48,11 +48,13 @@
 #define SUSPENDER_BRAZO 43
 #define REANUDAR_BRAZO 44
 
+/* Se define los core asociado a cada tipo de tarea */
 #define CORE_BRAZOS 0
 #define CORE_PLANIFICACION 1
 #define CORE_ADMIN 2
 #define CORE_RECEPCION 3
 
+/*Indentificadores de memoria compartida */
 #define ID_MC 124
 #define ID_MC_INFO 224
 #define MAX_BUFFER 100

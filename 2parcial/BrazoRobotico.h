@@ -81,45 +81,61 @@ struct BrazoRobotico* pushP(struct BrazoRobotico** inicio, int id, int cantidadP
  * @param esquema metodo de funcionamiento y prioridad de la cola
  * @return una referencia al brazo robotico */
 void updateBrazo(struct BrazoRobotico** inicio, int id, int esquema){
-    if(esquema == ESQUEMA_PRIMERO_DISPONIBLE){
+    if(esquema == ESQUEMA_PRIMERO_DISPONIBLE) {
         return; // no es necesario hacer algo
     }
-    struct BrazoRobotico* start = (*inicio);
-    struct BrazoRobotico* temporal = NULL;
-    if ((*inicio)->id != id) {
-        while (start->siguiente != NULL) {
-            if(start->siguiente->id == id){
-                temporal = start->siguiente;
-                start->siguiente = temporal->siguiente;
-                break;
+    if(esquema == ESQUEMA_MENOR_ITEM_PENDIENTES){
+        struct BrazoRobotico* start = (*inicio);
+        struct BrazoRobotico* temporal = NULL;
+        if ((*inicio)->id != id) {
+            while (start != NULL) {
+                if(start->id == id){
+                    temporal = start;
+                    break;
+                }
+                start = start->siguiente;
             }
-            start = start->siguiente;
+        }else{
+            temporal = (*inicio);
         }
-    }else{
-        temporal = (*inicio);
-    }
-    if(temporal == NULL){
-        printf("ERROR: BrazoRobotico -> updateBrazo, no existe brazo con ese id.");
-        return;
-    }
-    start = (*inicio);
-    if(temporal -> estado == BRAZO_SUSPENDIDO){ //LO ENVIO AL FINAL
-        while (start->siguiente != NULL) {
-            start = start->siguiente;
+        if(temporal == NULL){
+            printf("ERROR: BrazoRobotico -> updateBrazo, no existe brazo con ese id.");
+            return;
         }
-        temporal->siguiente = start->siguiente;  // a NULL
-        start->siguiente = temporal;
-    }else{
-        while (start->siguiente != NULL && start->siguiente->cantPedidos < temporal->cantPedidos) {
-            start = start->siguiente;
-        }
-        temporal->siguiente = start->siguiente;
-        start->siguiente = temporal;
-    }
-    if(esquema == ESQUEMA_IGUAL_X_PEDIDOS){
+        start = (*inicio);
+        if(temporal -> estado == BRAZO_SUSPENDIDO){ //LO ENVIO AL FINAL
+            while (start->siguiente != NULL) {
+                start = start->siguiente;
+            }
+            temporal->siguiente = start->siguiente;  // a NULL
+            start->siguiente = temporal;
+        }else{
+            if((*inicio)->cantPedidos >= temporal->cantPedidos){
+                (*inicio) = (*inicio)->siguiente;
+                start = (*inicio);
+                while (start != NULL && start->cantPedidos < temporal->cantPedidos) {
+                    if(start->siguiente == NULL){
+                        temporal->siguiente = start->siguiente;
+                        start->siguiente = temporal;
+                        return;
+                    }
+                    start = start->siguiente;
+                }
+                temporal->siguiente = start->siguiente;
+                start->siguiente = temporal;
+                return;
+            }else{
+                start = (*inicio);
+                while (start->siguiente != NULL && start->siguiente->cantPedidos < temporal->cantPedidos) {
+                    start = start->siguiente;
+                }
+                temporal->siguiente = start->siguiente;
+                start->siguiente = temporal;
+            }
 
-
+        }
     }
+
 }
 
 /**
