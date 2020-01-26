@@ -1,16 +1,17 @@
-//
-// Mauricio Leiton Lázaro(mdleiton)
-// Fecha: 12/1/20.
-//
+#define _GNU_SOURCE
+#include <string.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <sys/signal.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <semaphore.h>
 #include <pthread.h>
-#include <limits.h>
 #include <sys/syscall.h>
 #include <signal.h>
 #include <limits.h>
@@ -28,13 +29,9 @@ int mcID2;
  *  Función que finaliza adecuadamente el proceso. */
 void finalizar(){
     procesos->pidAdmin = -1;
-    sem_destroy(&procesos->mutex);
     shmdt((void *) procesos);
-    shmctl(mcID, IPC_RMID, NULL);
-    sem_destroy(&informacion->mutex);
     shmdt((void *) informacion);
-    shmctl(mcID2, IPC_RMID, NULL);
-    printf("admin -> finalizar, memorias compartidas han sido eliminadas.\n");
+    printf("admin -> finalizar, memorias compartidas han sido liberadas.\n");
     exit(1);
 }
 
@@ -42,12 +39,12 @@ void finalizar(){
  *  Función que maneja la señal SIGINT. Notifica su finalización al proceso resultado en caso de estar ejecutándose. */
 void manejadorSIGINT(int signum, siginfo_t *info, void *ptr){
     enviarSenal(procesos->pidPlanificador, 1, EXITPROGRAMA_ADMIN);
-    finalizar();  // finaliza debidamente
+   finalizar();  // finaliza debidamente
 }
 
 /**
  *  Función que maneja la señal que indica que el proceso planificacion acabo de finalizar */
-void manejadorEXITPLANIFICADOR(int signum, siginfo_t *info, void *ptr){
+void manejadorEXITPLANIF(int signum, siginfo_t *info, void *ptr){
     printf("\nadmin -> El proceso planificacion acabo de finalizar\n");
     //finalizar();  // finaliza debidamente
 }
@@ -66,9 +63,9 @@ int  main(int  argc, char *argv[]){
     sigaction(SIGINT, &act, NULL);
 
     memset(&act, 0, sizeof(act));
-    act.sa_sigaction = manejadorEXITPLANIFICADOR;
-    act.sa_flags = EXITPROGRAMA_PLANIFICADOR;
-    sigaction(EXITPROGRAMA_PLANIFICADOR, &act, NULL);
+    act.sa_sigaction = manejadorEXITPLANIF;
+    act.sa_flags = EXITPROGRAMA_PLANIF;
+    sigaction(EXITPROGRAMA_PLANIF, &act, NULL);
 
     // acceso a memoria compartida.
     mcID = shmget(ID_MC, sizeof(struct Proceso), 0666);
@@ -134,9 +131,9 @@ int  main(int  argc, char *argv[]){
         if(idBrazo > 0 && idBrazo <= nBrazos){
             sem_wait(&procesos->mutex);
             if(opcion == 2){
-                send = enviarSenal(procesos->pidPlanificador, idBrazo, SUSPENDER_BRAZO);
+                send = enviarSenal(procesos->pidPlanificador, 1, SUSPENDER_BRAZO);
             }else{
-                send = enviarSenal(procesos->pidPlanificador, idBrazo, REANUDAR_BRAZO);
+                send = enviarSenal(procesos->pidPlanificador, 1, REANUDAR_BRAZO);
             }
             sem_post(&procesos->mutex);
             if(send != 0){
