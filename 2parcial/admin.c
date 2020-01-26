@@ -1,3 +1,7 @@
+//
+// Mauricio Leiton Lázaro(mdleiton)
+// Fecha: 12/1/20.
+//
 #define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>

@@ -1,9 +1,15 @@
 //
-// Created by mdleiton on 13/1/20.
+// Mauricio Leiton Lázaro(mdleiton)
+// Fecha: 12/1/20.
 //
-
+#include <unistd.h>
 #include <sys/syscall.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <signal.h>
+#include <pthread.h>
+#include <semaphore.h>
 
 /**
  * Esquemas de funcionamiento
@@ -31,16 +37,16 @@
 #define PEDIDO_FINALIZADO 2
 
 /* SEÑALES	*/
-#define EXITPROGRAMA_PLANIFICADOR 31
+#define EXITPROGRAMA_PLANIF 41
 #define EXITPROGRAMA_GENERADOR 32
 #define INITPROGRAMA_PLANIFICADOR 40
 #define INITPROGRAMA_GENERADOR 34
 #define EXITPROGRAMA_ADMIN 35
 #define INITPROGRAMA_ADMIN 36
 
-#define CREAR_BRAZO 37
-#define SUSPENDER_BRAZO 38
-#define REANUDAR_BRAZO 39
+#define CREAR_BRAZO 46
+#define SUSPENDER_BRAZO 42
+#define REANUDAR_BRAZO 43
 
 #define ID_MC 124
 #define ID_MC_INFO 224
