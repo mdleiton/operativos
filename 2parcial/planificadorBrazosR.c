@@ -61,7 +61,21 @@ void *threadBrazoRobotico(void *arg){
     int id, totalItems, resultado = 2;
     while(resultado != 0){
         memset(data, 0, sizeof(data));
+        pthread_mutex_lock(&brazo->mutex);
+        if(brazo->estado == BRAZO_SUSPENDIDO){
+            // descolar datos de cola y actualizar brazo NULL
+            pthread_cond_wait(&brazo->estadoCon, &brazo->mutex);
+        }
+        pthread_mutex_unlock(&brazo->mutex);
         resultado = dequeue(brazo->cola, data, 0);
+        pthread_mutex_lock(&brazo->mutex);
+        if(brazo->estado == BRAZO_SUSPENDIDO){
+            enqueue(data, brazo->cola);
+            // descolar datos de cola y actualizar brazo NULL
+            pthread_cond_wait(&brazo->estadoCon, &brazo->mutex);
+            continue;
+        }
+        pthread_mutex_unlock(&brazo->mutex);
         if(resultado == 1){
             char* ptr = data;
             elemento = strtok_r(ptr, "-", &ptr);
@@ -83,10 +97,11 @@ void *threadBrazoRobotico(void *arg){
                                 if(brazo->pedidos[i].totalPendientes == 1){
                                     printf("Brazo %d | pedido: %d finalizado.\n", brazo->id, id);
                                     brazo->cantPedidos -= 1;
-                                    // deberia actualizar brazos si es otro esquema , y en la funcion no hacer nada de ser el caso
                                     brazo->pendientesItem-=1;
                                     brazo->pedidos[i].id = -1;
                                     brazo->pedidos[i].totalPendientes = 0;
+                                    if(brazo->cantPedidos < n_pedidosxbrazo) brazo->estado = BRAZO_DISPONIBLE;
+                                    updateBrazo(&brazosCola, brazo->id, esquema);
                                     pthread_mutex_unlock(&mutex);
 
                                     pthread_mutex_lock(&mutex_pedidos);
@@ -170,21 +185,27 @@ void *threadRecepcionPaquetes(void *arg){
     rc = listen(server_sockfd, 50);
     printf("RC from listen = %d\n", rc );
 
-    client_len = sizeof(client_address);
-    client_sockfd = accept(server_sockfd, (struct sockaddr *) &client_address, &client_len);
-    printf("after accept()... client_sockfd = %d\n", client_sockfd);
-
     // recibiendo pedidos
     while(1){
-        memset(buffer,0,sizeof(buffer));
-        rc = read(client_sockfd, &buffer,sizeof(buffer));
-        if (rc == 0) break;
-        memset(data, 0, sizeof(data));
-        sprintf(data,"%s",buffer);
-        enqueue(data, cola);
-        //printf("[Data = %s rc=%d]\n",buffer,rc);
-        // se puede tratar de asignar de una un brazo robotico
+        client_len = sizeof(client_address);
+        client_sockfd = accept(server_sockfd, (struct sockaddr *) &client_address, &client_len);
+        printf("after accept()... client_sockfd = %d\n", client_sockfd);
+        while(1){
+            memset(buffer,0,sizeof(buffer));
+            rc = read(client_sockfd, &buffer,sizeof(buffer));
+            if (rc == 0){
+                printf("\n\nEsperando mas mensaje. Ejecute otra vez ./eorder.\n\n");
+                break;
+            }
+            memset(data, 0, sizeof(data));
+            sprintf(data,"%s",buffer);
+            enqueue(data, cola);
+            //printf("[Data = %s rc=%d]\n",buffer,rc);
+            // se puede tratar de asignar de una un brazo robotico
+        }
+
     }
+
     printf("Finalizando hilos de recepción de nuevos paquetes.\n");
     pthread_exit(NULL);
 }
@@ -202,6 +223,7 @@ int asignarBrazo(struct Pedido** pedido){
         return 0;
     }else{
         brazo->cantPedidos += 1;
+        if(brazo->cantPedidos == n_pedidosxbrazo) brazo->estado = BRAZO_OCUPADO;
         pthread_mutex_lock(&mutex_pedidos);
         (*pedido)->brazo = brazo;
         brazo->pendientesItem += (*pedido)->total;
@@ -214,6 +236,7 @@ int asignarBrazo(struct Pedido** pedido){
         }
         printf("planificador-> main, Nuevo Pedido: %d | total items:%d | asignado a brazo %d\n", (*pedido)->id,
                (*pedido)->total, brazo->id);
+        updateBrazo(&brazosCola, brazo->id, esquema);
         pthread_mutex_unlock(&mutex_pedidos);
         pthread_mutex_unlock(&mutex);
         return 1;
@@ -297,15 +320,49 @@ void manejadorSIGCREARBRAZO(int signum, siginfo_t *info, void *ptr){
 
 /**
  *  Función que maneja la señal SUSPENDER_BRAZO. */
-void manejadorSIGSUSPENDERBRAZO(int signum, siginfo_t *info, void *ptr){
-    printf("manejadorSIGSUSPENDER_BRAZO, señal recibida para suspender el brazo xx.\n");
+void manejadorSuspender(int signum, siginfo_t *info, void *ptr){
+    int brazoId = info->si_value.sival_int;
+    printf("manejadorSuspender, señal recibida para suspender el brazo con id: %d.\n", brazoId);
+    pthread_mutex_lock(&mutex);
+    struct BrazoRobotico* brazo = getBrazobyId(&brazosCola, brazoId, esquema);
+    pthread_mutex_unlock(&mutex);
+    if(brazo->estado != BRAZO_SUSPENDIDO){
+        pthread_mutex_lock(&brazo->mutex);
+        brazo->estado = BRAZO_SUSPENDIDO;
+        pthread_mutex_unlock(&brazo->mutex);
+        printf("manejadorSuspender, el brazo con id: %d, se ha suspendido correctamente.\n", brazoId);
+
+        sem_wait(&informacion->mutex);
+        informacion->brazosActivos = informacion->brazosActivos - 1;
+        informacion->brazosSuspendidos = informacion->brazosSuspendidos + 1;
+        sem_post(&informacion->mutex);
+    }else{
+        printf("manejadorSuspender, el brazo con id: %d, ya se encuentra en modo suspendido.\n", brazoId);
+    }
 }
 
 /**
  *  Función que maneja la señal REANUDAR_BRAZO. */
-void manejadorSIGREANUDARBRAZO(int signum, siginfo_t *info, void *ptr){
-    int a =2;
-    printf("manejadorSIGSUSPENDER_BRAZO, señal recibida para reanudar el brazo xx.\n");
+void manejadorReanudar(int signum, siginfo_t *info, void *ptr){
+    int brazoId = info->si_value.sival_int;
+    printf("manejadorSuspender, señal recibida para reanudar el brazo con id: %d.\n", brazoId);
+    pthread_mutex_lock(&mutex);
+    struct BrazoRobotico* brazo = getBrazobyId(&brazosCola, brazoId, esquema);
+    pthread_mutex_unlock(&mutex);
+
+    pthread_mutex_lock(&brazo->mutex);
+    if(brazo->cantPedidos < n_pedidosxbrazo){
+        brazo->estado = BRAZO_DISPONIBLE;
+    }else{
+        brazo->estado = BRAZO_OCUPADO;
+    }
+    pthread_cond_signal(&brazo->estadoCon);
+    pthread_mutex_unlock(&brazo->mutex);
+    printf("manejadorSuspender, el brazo con id: %d, se ha reanudado correctamente.\n", brazoId);
+    sem_wait(&informacion->mutex);
+    informacion->brazosActivos = informacion->brazosActivos + 1;
+    informacion->brazosSuspendidos = informacion->brazosSuspendidos - 1;
+    sem_post(&informacion->mutex);
 }
 
 /**
@@ -325,12 +382,12 @@ int main(int argc, char *argv[]){
     sigaction(CREAR_BRAZO, &act, NULL);
 
     memset(&act, 0, sizeof(act));
-    act.sa_sigaction = manejadorSIGSUSPENDERBRAZO;
+    act.sa_sigaction = manejadorSuspender;
     act.sa_flags = SUSPENDER_BRAZO | SA_SIGINFO;
     sigaction(SUSPENDER_BRAZO, &act, NULL);
 
     memset(&act, 0, sizeof(act));
-    act.sa_sigaction = manejadorSIGREANUDARBRAZO;
+    act.sa_sigaction = manejadorReanudar;
     act.sa_flags = REANUDAR_BRAZO | SA_SIGINFO;
     sigaction(REANUDAR_BRAZO, &act, NULL);
 
@@ -364,7 +421,6 @@ int main(int argc, char *argv[]){
         printf("Error: planificador-> main, Parámetro ESQUEMAPLANIFICACION inválido.\n");
         exit(1);
     }
-
 
     // Acceso a memoria compartida que contiene los PID de los procesos.
     mcID = shmget(ID_MC, sizeof(struct Proceso), IPC_CREAT | 0666);
