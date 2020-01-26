@@ -42,13 +42,19 @@ int mcID;
 int client_sockfd;
 struct sigaction act;
 
+int cores = 1;
+cpu_set_t cpuset;
+
 /**
  * rutina a ejecutarse por cada hilo de brazo robótico que se inicie */
 void *threadBrazoRobotico(void *arg){
+    // afinidad
+    CPU_ZERO(&cpuset);
+    if(cores>1){
+        setAffinity(CORE_BRAZOS, cpuset);
+    }
     struct BrazoRobotico *brazo = (struct BrazoRobotico*) arg;
     printf("Brazo con id: %d iniciado.\n", brazo->id);
-    pthread_t thread = pthread_self();
-    // asignarlo a un especifico core
 
     char data[100];
     char* elemento;
@@ -130,12 +136,18 @@ void *threadBrazoRobotico(void *arg){
             }
         }
     }
-    return NULL;
+    pthread_exit(NULL);
 }
 
 /**
  * rutina a ejecutarse para recibir nuevos paquetes desde el socket. */
 void *threadRecepcionPaquetes(void *arg){
+    //afinidad
+    CPU_ZERO(&cpuset);
+    if(cores>1){
+        setAffinity((CORE_RECEPCION % cores), cpuset);
+    }
+
     int server_sockfd;
     int server_len;
     int rc;
@@ -174,7 +186,7 @@ void *threadRecepcionPaquetes(void *arg){
         // se puede tratar de asignar de una un brazo robotico
     }
     printf("Finalizando hilos de recepción de nuevos paquetes.\n");
-    return 1;
+    pthread_exit(NULL);
 }
 
 /**
@@ -211,6 +223,11 @@ int asignarBrazo(struct Pedido** pedido){
 /**
  * rutina a ejecutarse para desencolar datos. */
 void *threadprocesamientoPaquetes(void *arg){
+    //afinidad
+    CPU_ZERO(&cpuset);
+    if(cores>1){
+        setAffinity( (CORE_PLANIFICACION % cores), cpuset);
+    }
     char* elemento;
     int id, resultado;
     char data[MAX_BUFFER];
@@ -246,7 +263,7 @@ void *threadprocesamientoPaquetes(void *arg){
             continue;
         }
     }
-    return 1;
+    pthread_exit(NULL);
 }
 
 /**
@@ -298,7 +315,9 @@ void manejadorSIGEXITPROGRAMAADMIN(int signum, siginfo_t *info, void *ptr){
 }
 
 int main(int argc, char *argv[]){
-    long pid = syscall(SYS_gettid);
+    // afinidad
+    cores = numeroNucleos();
+
     // manejadores de senales.
     memset(&act, 0, sizeof(act));
     act.sa_sigaction = manejadorSIGCREARBRAZO;
@@ -345,6 +364,7 @@ int main(int argc, char *argv[]){
         printf("Error: planificador-> main, Parámetro ESQUEMAPLANIFICACION inválido.\n");
         exit(1);
     }
+
 
     // Acceso a memoria compartida que contiene los PID de los procesos.
     mcID = shmget(ID_MC, sizeof(struct Proceso), IPC_CREAT | 0666);

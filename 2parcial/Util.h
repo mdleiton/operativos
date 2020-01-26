@@ -37,16 +37,21 @@
 #define PEDIDO_FINALIZADO 2
 
 /* SEÑALES	*/
-#define EXITPROGRAMA_PLANIF 41
-#define EXITPROGRAMA_GENERADOR 32
-#define INITPROGRAMA_PLANIFICADOR 40
-#define INITPROGRAMA_GENERADOR 34
-#define EXITPROGRAMA_ADMIN 35
-#define INITPROGRAMA_ADMIN 36
+#define EXITPROGRAMA_PLANIF 36
+#define EXITPROGRAMA_GENERADOR 37
+#define INITPROGRAMA_PLANIFICADOR 38
+#define INITPROGRAMA_GENERADOR 39
+#define EXITPROGRAMA_ADMIN 40
+#define INITPROGRAMA_ADMIN 41
 
-#define CREAR_BRAZO 46
-#define SUSPENDER_BRAZO 42
-#define REANUDAR_BRAZO 43
+#define CREAR_BRAZO 42
+#define SUSPENDER_BRAZO 43
+#define REANUDAR_BRAZO 44
+
+#define CORE_BRAZOS 0
+#define CORE_PLANIFICACION 1
+#define CORE_ADMIN 2
+#define CORE_RECEPCION 3
 
 #define ID_MC 124
 #define ID_MC_INFO 224
@@ -72,7 +77,7 @@ struct Proceso{
     sem_t mutex;
 };
 
-/*
+/**
  *  Función que envia una señal a un proceso.
  *  @param pid identificador del proceso.
  *  @param signalValue entero que se puede enviar en la señal.
@@ -87,4 +92,30 @@ int enviarSenal(long pid, int signalValue, int signalId){
         return send;
     }
     return -1;
+}
+
+/**
+ *  Función que retorna la cantidad de núcleo que posee tu computadora
+ *  @return un número entero positivo.
+ */
+int numeroNucleos(){
+    return sysconf(_SC_NPROCESSORS_ONLN);
+}
+
+/**
+ * permite setear la afinidad a un hilo
+ * @param core  id del core
+ * @param cpuset
+ * @return
+ */
+void setAffinity(int core, cpu_set_t cpuset){
+    CPU_ZERO(&cpuset);
+    pthread_t thread = pthread_self();
+    cpu_set_t cpusetThread;
+    CPU_ZERO(&cpusetThread);
+    CPU_SET(core, &cpusetThread);
+    int resultAffinity = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpusetThread);
+    if (resultAffinity != 0){
+        printf("resultado->thread_routine, error al setear la afinidad al hilo\n");
+    }
 }

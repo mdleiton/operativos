@@ -28,6 +28,8 @@ struct Proceso *procesos;
 struct Informacion *informacion;
 int mcID;
 int mcID2;
+int cores = 1;
+cpu_set_t cpuset;
 
 /**
  *  Función que finaliza adecuadamente el proceso. */
@@ -57,6 +59,13 @@ int  main(int  argc, char *argv[]){
     if (argc != 1) {
         printf("Usar: %s \n", argv[0]);
         exit(1);
+    }
+
+    // afinidad
+    CPU_ZERO(&cpuset);
+    cores = numeroNucleos();
+    if(cores>1){
+        setAffinity(CORE_ADMIN, cpuset);
     }
 
     // manejadores de senales.
