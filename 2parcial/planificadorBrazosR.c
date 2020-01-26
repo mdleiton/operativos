@@ -60,18 +60,16 @@ void *threadBrazoRobotico(void *arg){
     char* elemento;
     int id, totalItems, resultado = 2;
     while(resultado != 0){
-        memset(data, 0, sizeof(data));
         pthread_mutex_lock(&brazo->mutex);
         if(brazo->estado == BRAZO_SUSPENDIDO){
-            // descolar datos de cola y actualizar brazo NULL
             pthread_cond_wait(&brazo->estadoCon, &brazo->mutex);
         }
         pthread_mutex_unlock(&brazo->mutex);
-        resultado = dequeue(brazo->cola, data, 0);
+        memset(data, 0, sizeof(data));
+        resultado = dequeue(brazo->cola, data, 0);  // QUE SI ESTA AQUI CUANDO LO VOY A SUSPENDER
         pthread_mutex_lock(&brazo->mutex);
         if(brazo->estado == BRAZO_SUSPENDIDO){
             enqueue(data, brazo->cola);
-            // descolar datos de cola y actualizar brazo NULL
             pthread_cond_wait(&brazo->estadoCon, &brazo->mutex);
             continue;
         }
@@ -95,7 +93,8 @@ void *threadBrazoRobotico(void *arg){
                                 brazo->pendientesItem-=totalItems;
                                 totalItems = 0;
                                 if(brazo->pedidos[i].totalPendientes == 1){
-                                    printf("Brazo %d | pedido: %d finalizado.\n", brazo->id, id);
+                                    brazo->totalPaquetesProcesados += 1;
+                                    printf("Brazo %d | total Procesados %d  | pedido: %d finalizado.\n", brazo->id, brazo->totalPaquetesProcesados, id);
                                     brazo->cantPedidos -= 1;
                                     brazo->pendientesItem-=1;
                                     brazo->pedidos[i].id = -1;
@@ -143,8 +142,9 @@ void *threadBrazoRobotico(void *arg){
                     for (int i = 0; i < n_pedidosxbrazo; i++) {
                         if(brazo->pedidos[i].id == id){
                             brazo->pedidos[i].totalPendientes -= totalItems;
-                            printf("NUEVO ITEM -> Brazo %d | pedido:%d | items agregados/pendientes :%d/%d  \n",
-                                   brazo->id, id, totalItems, brazo->pedidos[i].totalPendientes);
+                            brazo->totalPaquetesProcesados += 1;
+                            printf("NUEVO ITEM -> Brazo %d | total Procesados %d | pedido:%d | items agregados/pendientes :%d/%d  \n",
+                                   brazo->id, brazo->totalPaquetesProcesados, id, totalItems, brazo->pedidos[i].totalPendientes);
                         }
                     }
                 }
@@ -199,13 +199,12 @@ void *threadRecepcionPaquetes(void *arg){
             }
             memset(data, 0, sizeof(data));
             sprintf(data,"%s",buffer);
+
             enqueue(data, cola);
             //printf("[Data = %s rc=%d]\n",buffer,rc);
             // se puede tratar de asignar de una un brazo robotico
         }
-
     }
-
     printf("Finalizando hilos de recepción de nuevos paquetes.\n");
     pthread_exit(NULL);
 }
@@ -226,18 +225,23 @@ int asignarBrazo(struct Pedido** pedido){
         if(brazo->cantPedidos == n_pedidosxbrazo) brazo->estado = BRAZO_OCUPADO;
         pthread_mutex_lock(&mutex_pedidos);
         (*pedido)->brazo = brazo;
-        brazo->pendientesItem += (*pedido)->total;
+        brazo->pendientesItem += (*pedido)->totalPendientes;
         for (int i = 0; i < n_pedidosxbrazo; i++) {
             if (brazo->pedidos[i].id == -1) {
                 brazo->pedidos[i].id = (*pedido)->id;
-                brazo->pedidos[i].totalPendientes = (*pedido)->total;
+                brazo->pedidos[i].totalPendientes = (*pedido)->totalPendientes;
                 break;
             }
         }
-        printf("planificador-> main, Nuevo Pedido: %d | total items:%d | asignado a brazo %d\n", (*pedido)->id,
-               (*pedido)->total, brazo->id);
-        updateBrazo(&brazosCola, brazo->id, esquema);
+        if((*pedido)->totalPendientes != (*pedido)->total){
+            printf("planificador-> main, Pedido reasignado: %d | total items:%d | total pendientes: %d | asignado a brazo %d\n", (*pedido)->id,
+                   (*pedido)->total, (*pedido)->totalPendientes, brazo->id);
+        }else{
+            printf("planificador-> main, Nuevo Pedido     : %d | total items:%d | total pendientes: %d | asignado a brazo %d\n", (*pedido)->id,
+                   (*pedido)->total, (*pedido)->totalPendientes, brazo->id);
+        }
         pthread_mutex_unlock(&mutex_pedidos);
+        updateBrazo(&brazosCola, brazo->id, esquema);
         pthread_mutex_unlock(&mutex);
         return 1;
     }
@@ -308,7 +312,7 @@ void finalizar(){
  *  Función que maneja la señal SIGINT. Notifica su finalización al proceso admin en caso de estar ejecutándose. */
 void manejadorSIGINT(int signum, siginfo_t *info, void *ptr){
     enviarSenal(procesos->pidAdmin, 1, EXITPROGRAMA_PLANIF);
-    finalizar();  // finaliza debidamente
+    finalizar();
 }
 
 /**
@@ -330,6 +334,29 @@ void manejadorSuspender(int signum, siginfo_t *info, void *ptr){
         pthread_mutex_lock(&brazo->mutex);
         brazo->estado = BRAZO_SUSPENDIDO;
         pthread_mutex_unlock(&brazo->mutex);
+
+        pthread_mutex_lock(&mutex_pedidos);
+        for (int i = 0; i < n_pedidosxbrazo; i++) {
+            if(brazo->pedidos[i].id == -1) continue;
+            struct Pedido *pedido = find(brazo->pedidos[i].id, pedidos);
+            pedido->brazo = NULL;
+            pedido->totalPendientes = brazo->pedidos[i].totalPendientes;
+            brazo->pendientesItem -= brazo->pedidos[i].totalPendientes;
+            brazo->pedidos[i].id = -1;
+            brazo->pedidos[i].totalPendientes = 0;
+        }
+        brazo->cantPedidos = 0;
+        if(brazo->cola->contador > 0){
+            // se puede crear una nueva cola
+            char data[100];
+            int cant = brazo->cola->contador;
+            for(int i=0; i< cant; i++){
+                memset(data, 0, sizeof(data));
+                dequeue(brazo->cola, data, 0);  // QUE SI ESTA AQUI CUANDO LO VOY A SUSPENDER
+                enqueue(data, cola);
+            }
+        }
+        pthread_mutex_unlock(&mutex_pedidos);
         printf("manejadorSuspender, el brazo con id: %d, se ha suspendido correctamente.\n", brazoId);
 
         sem_wait(&informacion->mutex);
@@ -345,30 +372,33 @@ void manejadorSuspender(int signum, siginfo_t *info, void *ptr){
  *  Función que maneja la señal REANUDAR_BRAZO. */
 void manejadorReanudar(int signum, siginfo_t *info, void *ptr){
     int brazoId = info->si_value.sival_int;
-    printf("manejadorSuspender, señal recibida para reanudar el brazo con id: %d.\n", brazoId);
+    printf("manejadorReanudar, señal recibida para reanudar el brazo con id: %d.\n", brazoId);
     pthread_mutex_lock(&mutex);
     struct BrazoRobotico* brazo = getBrazobyId(&brazosCola, brazoId, esquema);
     pthread_mutex_unlock(&mutex);
-
-    pthread_mutex_lock(&brazo->mutex);
-    if(brazo->cantPedidos < n_pedidosxbrazo){
-        brazo->estado = BRAZO_DISPONIBLE;
+    if(brazo->estado == BRAZO_SUSPENDIDO){
+        pthread_mutex_lock(&brazo->mutex);
+        if(brazo->cantPedidos < n_pedidosxbrazo){
+            brazo->estado = BRAZO_DISPONIBLE;
+        }else{
+            brazo->estado = BRAZO_OCUPADO;
+        }
+        pthread_cond_signal(&brazo->estadoCon);
+        pthread_mutex_unlock(&brazo->mutex);
+        printf("manejadorReanudar, el brazo con id: %d, se ha reanudado correctamente.\n", brazoId);
+        sem_wait(&informacion->mutex);
+        informacion->brazosActivos = informacion->brazosActivos + 1;
+        informacion->brazosSuspendidos = informacion->brazosSuspendidos - 1;
+        sem_post(&informacion->mutex);
     }else{
-        brazo->estado = BRAZO_OCUPADO;
+        printf("manejadorReanudar, el brazo con id: %d, ya se encuentra en operativo.\n", brazoId);
     }
-    pthread_cond_signal(&brazo->estadoCon);
-    pthread_mutex_unlock(&brazo->mutex);
-    printf("manejadorSuspender, el brazo con id: %d, se ha reanudado correctamente.\n", brazoId);
-    sem_wait(&informacion->mutex);
-    informacion->brazosActivos = informacion->brazosActivos + 1;
-    informacion->brazosSuspendidos = informacion->brazosSuspendidos - 1;
-    sem_post(&informacion->mutex);
 }
 
 /**
  *  Función que maneja la señal EXITPROGRAMA_ADMIN. */
-void manejadorSIGEXITPROGRAMAADMIN(int signum, siginfo_t *info, void *ptr){
-    printf("manejadorSIGEXITPROGRAMA_ADMIN, señal recibida para finalizar.\n");
+void manejadorExitAdmin(int signum, siginfo_t *info, void *ptr){
+    printf("manejadorExitAdmin, señal recibida, admin ha finalizado.\n");
 }
 
 int main(int argc, char *argv[]){
@@ -392,7 +422,7 @@ int main(int argc, char *argv[]){
     sigaction(REANUDAR_BRAZO, &act, NULL);
 
     memset(&act, 0, sizeof(act));
-    act.sa_sigaction = manejadorSIGEXITPROGRAMAADMIN;
+    act.sa_sigaction = manejadorExitAdmin;
     act.sa_flags = EXITPROGRAMA_ADMIN | SA_SIGINFO;
     sigaction(EXITPROGRAMA_ADMIN, &act, NULL);
 
