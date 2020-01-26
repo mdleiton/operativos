@@ -339,9 +339,20 @@ void manejadorSIGINT(int signum, siginfo_t *info, void *ptr){
 
 /**
  *  Función que maneja la señal CREAR_BRAZO. */
-void manejadorSIGCREARBRAZO(int signum, siginfo_t *info, void *ptr){
-    int a =2;
-    printf("manejadorSIGCREAR_BRAZO, señal recibida para crear nuevo brazo.\n");
+void manejadorCrear(int signum, siginfo_t *info, void *ptr){
+    printf("manejadorCrear, señal recibida para crear nuevo brazo.\n");
+    pthread_t thread;
+    pthread_mutex_lock(&mutex);
+    n_brazos+=1;
+    struct BrazoRobotico *t = pushP(&brazosCola, n_brazos, n_pedidosxbrazo, esquema);
+    int estado_hilo = pthread_create(&thread, NULL, threadBrazoRobotico, (void*) t);
+    if (estado_hilo != 0){
+        printf("Error: planificador-> main, error al crear hilo.\n");
+    }
+    pthread_mutex_unlock(&mutex);
+    sem_wait(&informacion->mutex);
+    informacion->brazosActivos = n_brazos;
+    sem_post(&informacion->mutex);
 }
 
 /**
@@ -431,7 +442,7 @@ int main(int argc, char *argv[]){
 
     // manejadores de senales.
     memset(&act, 0, sizeof(act));
-    act.sa_sigaction = manejadorSIGCREARBRAZO;
+    act.sa_sigaction = manejadorCrear;
     act.sa_flags = CREAR_BRAZO;
     sigaction(CREAR_BRAZO, &act, NULL);
 
