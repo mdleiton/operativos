@@ -30,6 +30,7 @@ int mcID;
 int mcID2;
 int cores = 1;
 cpu_set_t cpuset;
+int finalizadoPlanificador = 0;
 
 /**
  *  Función que finaliza adecuadamente el proceso. */
@@ -51,8 +52,8 @@ void manejadorSIGINT(int signum, siginfo_t *info, void *ptr){
 /**
  *  Función que maneja la señal que indica que el proceso planificacion acabo de finalizar */
 void manejadorEXITPLANIF(int signum, siginfo_t *info, void *ptr){
+    finalizadoPlanificador = 1;
     printf("\nadmin -> El proceso planificacion acabo de finalizar\n");
-    //finalizar();  // finaliza debidamente
 }
 
 int  main(int  argc, char *argv[]){
@@ -110,6 +111,9 @@ int  main(int  argc, char *argv[]){
     char instruccion[50];
     int send;
     while(1){
+        if(finalizadoPlanificador == 1){
+            printf("\n\nPlanificador a finalizado, debe inicia planificador y reiniciar este programa.\n\n");
+        }
         sem_wait(&informacion->mutex);
         printf("Información del sistema: \nCantidad de pedidos finalizados: %d\n Cantidad de brazos activos: %d \n, Cantidad de brazos suspendidos: %d \n",
                 informacion->pedidosFinalizados, informacion->brazosActivos, informacion->brazosSuspendidos);

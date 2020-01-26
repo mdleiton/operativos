@@ -23,6 +23,7 @@ struct BrazoRobotico {
     int pendientesItem;
     int cantPedidos;  // sera mi prioridad
     pthread_mutex_t mutex;
+    int totalPaquetesProcesados;
     int estado;                 //
     pthread_cond_t estadoCon;
     struct Cola *cola;
@@ -41,6 +42,7 @@ struct BrazoRobotico* nuevaCola(int id, int cantidadPedidos, int esquema){
     temporal->id = id;
     temporal->cantPedidos = 0;
     temporal->pendientesItem = 0;
+    temporal->totalPaquetesProcesados = 0;
 
     temporal->cola = (struct Cola*)malloc(sizeof(struct Cola));
     temporal->cola->primero = NULL;
@@ -97,7 +99,7 @@ void updateBrazo(struct BrazoRobotico** inicio, int id, int esquema){
         struct BrazoRobotico* start = (*inicio);
         struct BrazoRobotico* temporal = (*inicio);
         if ((*inicio)->id == id) {
-            return (*inicio);
+            return;
         }else{
             while (start->siguiente != NULL) {
                 if(start->siguiente->id == id){
