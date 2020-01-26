@@ -1,3 +1,8 @@
+//
+// Mauricio Leiton Lázaro(mdleiton)
+// Fecha: 12/1/20.
+//
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -6,6 +11,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <sys/signal.h>
+#include <signal.h>
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
@@ -33,6 +40,7 @@ int mcID2;
 int mcID;
 
 int client_sockfd;
+struct sigaction act;
 
 /**
  * rutina a ejecutarse por cada hilo de brazo robótico que se inicie */
@@ -144,7 +152,7 @@ void *threadRecepcionPaquetes(void *arg){
     server_len = sizeof(server_address);
 
     rc = bind(server_sockfd, (struct sockaddr *) &server_address, server_len);
-    printf("RC from bind = %d\n", rc );
+    printf("RC from bind = %d\n", rc);
 
     //Create a connection queue and wait for clients
     rc = listen(server_sockfd, 50);
@@ -165,8 +173,8 @@ void *threadRecepcionPaquetes(void *arg){
         //printf("[Data = %s rc=%d]\n",buffer,rc);
         // se puede tratar de asignar de una un brazo robotico
     }
-    printf("Finalizando hilos de recepción de nuevos paquetes.");
-    return NULL;
+    printf("Finalizando hilos de recepción de nuevos paquetes.\n");
+    return 1;
 }
 
 /**
@@ -201,6 +209,47 @@ int asignarBrazo(struct Pedido** pedido){
 }
 
 /**
+ * rutina a ejecutarse para desencolar datos. */
+void *threadprocesamientoPaquetes(void *arg){
+    char* elemento;
+    int id, resultado;
+    char data[MAX_BUFFER];
+    while(1){
+        memset(data, 0, sizeof(data));
+        resultado = dequeue(cola, data, 0);
+        if(resultado==0) break;
+        char* ptr = data;
+        elemento = strtok_r(ptr, "-", &ptr);
+        if(elemento != NULL){
+            id = atoi(elemento);
+            pthread_mutex_lock(&mutex_pedidos);
+            struct Pedido *pedido = find(id, pedidos);
+            pthread_mutex_unlock(&mutex_pedidos);
+            if(pedido != NULL) {
+                sprintf(data,"%d-%s",id,ptr);
+                if(pedido->brazo == NULL){
+                    enqueue(data, cola);
+                    asignarBrazo(&pedido);
+                }else{
+                    enqueue(data, pedido->brazo->cola);
+                }
+            }else{
+                pthread_mutex_lock(&mutex_pedidos);
+                pedido = insertarPrimero(id, atoi(ptr), pedidos);
+                pthread_mutex_unlock(&mutex_pedidos);
+                if( asignarBrazo(&pedido) == 0){
+                    printf("ERROR: planificador-> main, Intento fallido de asignación de brazo, brazos ocupados.\n");
+                }
+            }
+        }else{
+            printf("ERROR: planificador-> main, Formato Incorrecto.\n");
+            continue;
+        }
+    }
+    return 1;
+}
+
+/**
  *  Función que finaliza adecuadamente el proceso. */
 void finalizar(){
     procesos->pidPlanificador = -1;
@@ -218,35 +267,64 @@ void finalizar(){
 /**
  *  Función que maneja la señal SIGINT. Notifica su finalización al proceso admin en caso de estar ejecutándose. */
 void manejadorSIGINT(int signum, siginfo_t *info, void *ptr){
-    enviarSenal(procesos->pidAdmin, 1, EXITPROGRAMA_PLANIFICADOR);
+    enviarSenal(procesos->pidAdmin, 1, EXITPROGRAMA_PLANIF);
     finalizar();  // finaliza debidamente
 }
 
 /**
  *  Función que maneja la señal CREAR_BRAZO. */
-void manejadorSIGCREAR_BRAZO(int signum, siginfo_t *info, void *ptr){
-    printf("manejadorSIGCREAR_BRAZO, señal recibida para crear nuevo brazo.");
+void manejadorSIGCREARBRAZO(int signum, siginfo_t *info, void *ptr){
+    int a =2;
+    printf("manejadorSIGCREAR_BRAZO, señal recibida para crear nuevo brazo.\n");
 }
 
 /**
  *  Función que maneja la señal SUSPENDER_BRAZO. */
-void manejadorSIGSUSPENDER_BRAZO(int signum, siginfo_t *info, void *ptr){
-    printf("manejadorSIGSUSPENDER_BRAZO, señal recibida para suspender el brazo xx.");
+void manejadorSIGSUSPENDERBRAZO(int signum, siginfo_t *info, void *ptr){
+    printf("manejadorSIGSUSPENDER_BRAZO, señal recibida para suspender el brazo xx.\n");
 }
 
 /**
  *  Función que maneja la señal REANUDAR_BRAZO. */
-void manejadorSIGREANUDAR_BRAZO(int signum, siginfo_t *info, void *ptr){
-    printf("manejadorSIGSUSPENDER_BRAZO, señal recibida para reanudar el brazo xx.");
+void manejadorSIGREANUDARBRAZO(int signum, siginfo_t *info, void *ptr){
+    int a =2;
+    printf("manejadorSIGSUSPENDER_BRAZO, señal recibida para reanudar el brazo xx.\n");
 }
 
 /**
  *  Función que maneja la señal EXITPROGRAMA_ADMIN. */
-void manejadorSIGEXITPROGRAMA_ADMIN(int signum, siginfo_t *info, void *ptr){
-    printf("manejadorSIGEXITPROGRAMA_ADMIN, señal recibida para finalizar.");
+void manejadorSIGEXITPROGRAMAADMIN(int signum, siginfo_t *info, void *ptr){
+    printf("manejadorSIGEXITPROGRAMA_ADMIN, señal recibida para finalizar.\n");
 }
 
 int main(int argc, char *argv[]){
+    long pid = syscall(SYS_gettid);
+    // manejadores de senales.
+    memset(&act, 0, sizeof(act));
+    act.sa_sigaction = manejadorSIGCREARBRAZO;
+    act.sa_flags = CREAR_BRAZO;
+    sigaction(CREAR_BRAZO, &act, NULL);
+
+    memset(&act, 0, sizeof(act));
+    act.sa_sigaction = manejadorSIGSUSPENDERBRAZO;
+    act.sa_flags = SUSPENDER_BRAZO | SA_SIGINFO;
+    sigaction(SUSPENDER_BRAZO, &act, NULL);
+
+    memset(&act, 0, sizeof(act));
+    act.sa_sigaction = manejadorSIGREANUDARBRAZO;
+    act.sa_flags = REANUDAR_BRAZO | SA_SIGINFO;
+    sigaction(REANUDAR_BRAZO, &act, NULL);
+
+    memset(&act, 0, sizeof(act));
+    act.sa_sigaction = manejadorSIGEXITPROGRAMAADMIN;
+    act.sa_flags = EXITPROGRAMA_ADMIN | SA_SIGINFO;
+    sigaction(EXITPROGRAMA_ADMIN, &act, NULL);
+
+    memset(&act, 0, sizeof(act));
+    act.sa_sigaction = manejadorSIGINT;
+    act.sa_flags = SIGINT;
+    sigaction(SIGINT, &act, NULL);
+
     // verificando ingreso correcto de parámetros
     if (argc != 4) {
         printf("Usar: %s N_BRAZOS N_PEDIDOSXBRAZO ESQUEMAPLANIFICACION\n", argv[0]);
@@ -304,40 +382,12 @@ int main(int argc, char *argv[]){
     informacion->brazosSuspendidos = 0;
     sem_post(&informacion->mutex);
 
-    // manejadores de senales.
-    struct sigaction act;
-    memset(&act, 0, sizeof(act));
-    act.sa_sigaction = manejadorSIGINT;
-    act.sa_flags = SIGINT;
-    sigaction(SIGINT, &act, NULL);
-
-    memset(&act, 0, sizeof(act));
-    act.sa_sigaction = manejadorSIGCREAR_BRAZO;
-    act.sa_flags = CREAR_BRAZO | SA_SIGINFO;
-    sigaction(CREAR_BRAZO, &act, NULL);
-
-    memset(&act, 0, sizeof(act));
-    act.sa_sigaction = manejadorSIGSUSPENDER_BRAZO;
-    act.sa_flags = SUSPENDER_BRAZO | SA_SIGINFO;
-    sigaction(SUSPENDER_BRAZO, &act, NULL);
-
-    memset(&act, 0, sizeof(act));
-    act.sa_sigaction = manejadorSIGREANUDAR_BRAZO;
-    act.sa_flags = REANUDAR_BRAZO | SA_SIGINFO;
-    sigaction(REANUDAR_BRAZO, &act, NULL);
-
-    memset(&act, 0, sizeof(act));
-    act.sa_sigaction = manejadorSIGEXITPROGRAMA_ADMIN;
-    act.sa_flags = EXITPROGRAMA_ADMIN | SA_SIGINFO;
-    sigaction(EXITPROGRAMA_ADMIN, &act, NULL);
-
     // definiendo la cola para almacenar los pedidos que lleguen
     cola = (struct Cola*)malloc(sizeof(struct Cola));
     cola->primero = NULL;
     cola->final = NULL;
     cola->contador = 0;
     pthread_mutex_init(&cola->mutex, NULL);
-
 
     // definiendo la lista para almacenar los pedidos que lleguen
     pedidos = (struct Pedidos*)malloc(sizeof(struct Pedidos));
@@ -362,55 +412,19 @@ int main(int argc, char *argv[]){
     }
 
     // Obtiene los pedidos por socket
-    estado_hilo = pthread_create(&thread, &attr, threadRecepcionPaquetes, NULL);
+    estado_hilo = pthread_create(&thread, NULL, threadRecepcionPaquetes, NULL);
     if (estado_hilo != 0){
         printf("Error: planificador-> main, error al crear hilo.\n");
     }
 
-    // desencolando mensajes. esto debe ir en otro hilo
-    char* elemento;
-    int id, resultado;
-    char data[MAX_BUFFER];
-	while(1){
-        memset(data, 0, sizeof(data));
-	    resultado = dequeue(cola, data, 0);
-        if(resultado==0) break;
-        char* ptr = data;
-        elemento = strtok_r(ptr, "-", &ptr);
-        if(elemento != NULL){
-            id = atoi(elemento);
-            pthread_mutex_lock(&mutex_pedidos);
-            struct Pedido *pedido = find(id, pedidos);
-            pthread_mutex_unlock(&mutex_pedidos);
-            if(pedido != NULL) {
-                //printf(" planificador-> main, Pedido ya registrado: (%d,%s) \n",pedido->id,ptr);
-                sprintf(data,"%d-%s",id,ptr);
-                if(pedido->brazo == NULL){
-                    enqueue(data, cola);
-                    asignarBrazo(&pedido);
-                }else{
-                    enqueue(data, pedido->brazo->cola);
-                }
-            }else{
-                pthread_mutex_lock(&mutex_pedidos);
-                pedido = insertarPrimero(id, atoi(ptr), pedidos);
-                pthread_mutex_unlock(&mutex_pedidos);
-                if( asignarBrazo(&pedido) == 0){
-                    printf("ERROR: planificador-> main, Intento fallido de asignación de brazo, brazos ocupados.\n");
-                }
-            }
-        }else{
-            printf("ERROR: planificador-> main, Formato Incorrecto.\n");
-            continue;
-        }
-	}
-    printf("planificador-> main, server exiting\n");
-    while(1){
-        sleep(2);
+    // desencolando mensajes
+    estado_hilo = pthread_create(&thread, NULL, threadprocesamientoPaquetes, NULL);
+    if (estado_hilo != 0){
+        printf("Error: planificador-> main, error al crear hilo.\n");
     }
-    close(client_sockfd);
+
+    while(1){
+        pause();
+    }
     return 0;
 }
-
-/* necesito crear hilos que encolen la informacion y dejar al hilo principal que reciba senales.
- * no puede esperar mucho esperar en bind del socket.*/
