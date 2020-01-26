@@ -333,6 +333,7 @@ void manejadorSuspender(int signum, siginfo_t *info, void *ptr){
     if(brazo->estado != BRAZO_SUSPENDIDO){
         pthread_mutex_lock(&brazo->mutex);
         brazo->estado = BRAZO_SUSPENDIDO;
+        updateBrazo(&brazosCola, brazo->id, esquema);
         pthread_mutex_unlock(&brazo->mutex);
 
         pthread_mutex_lock(&mutex_pedidos);
@@ -383,6 +384,7 @@ void manejadorReanudar(int signum, siginfo_t *info, void *ptr){
         }else{
             brazo->estado = BRAZO_OCUPADO;
         }
+        updateBrazo(&brazosCola, brazo->id, esquema);
         pthread_cond_signal(&brazo->estadoCon);
         pthread_mutex_unlock(&brazo->mutex);
         printf("manejadorReanudar, el brazo con id: %d, se ha reanudado correctamente.\n", brazoId);
@@ -534,3 +536,7 @@ int main(int argc, char *argv[]){
     }
     return 0;
 }
+/*
+ * crear brazo
+ * implementar esquema 2 y 3
+ */

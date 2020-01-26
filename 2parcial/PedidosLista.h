@@ -82,7 +82,7 @@ int length(struct Pedidos *pedidos) {
 /**
  * Permite obtener un pedido de la lista
  * @param id identificador del pedido que se desea obtener
- * @return
+ * @return referencia al pedido buscado
  */
 struct Pedido* find(int id, struct Pedidos *pedidos) {
     struct Pedido* current = pedidos->primero;
@@ -102,7 +102,7 @@ struct Pedido* find(int id, struct Pedidos *pedidos) {
 /**
  * Elimina un pedido a partir de su identificador
  * @param id identificador del pedido
- * @return
+ * @return referencia al pedido eliminar
  */
 struct Pedido* delete(int id, struct Pedidos *pedidos) {
     struct Pedido* current = pedidos->primero;
