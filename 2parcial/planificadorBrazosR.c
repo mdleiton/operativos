@@ -30,6 +30,7 @@ int n_pedidosxbrazo;
 int esquema;
 
 struct BrazoRobotico *brazosCola;
+struct BrazoRobotico * next;   // se usa en ESQUEMA = ESQUEMA_IGUAL_X_PEDIDOS
 pthread_mutex_t mutex;
 
 /**
@@ -215,12 +216,33 @@ void *threadRecepcionPaquetes(void *arg){
  * @return 1 en caso de que exista brazo robótico disponible.
  */
 int asignarBrazo(struct Pedido** pedido){
+    struct BrazoRobotico* brazo = NULL;
     pthread_mutex_lock(&mutex);
-    struct BrazoRobotico* brazo = getBrazo(&brazosCola, esquema, n_pedidosxbrazo);
+    if(esquema == ESQUEMA_IGUAL_X_PEDIDOS){
+        if(next == NULL){
+            next =  brazosCola;
+        }else{
+            next= next->siguiente;
+        }
+        while(next != NULL){
+            if(next->cantPedidos < n_pedidosxbrazo && next->estado == BRAZO_DISPONIBLE){
+                brazo = next;
+                next = brazo;
+                break;
+            }
+            next =  next->siguiente;
+        }
+    }else{
+        brazo = getBrazo(&brazosCola, esquema, n_pedidosxbrazo);
+    }
     if(brazo == NULL){
         pthread_mutex_unlock(&mutex);
         return 0;
     }else{
+        if(brazo->estado == BRAZO_SUSPENDIDO){
+            pthread_mutex_unlock(&mutex);
+            return 0;
+        }
         brazo->cantPedidos += 1;
         if(brazo->cantPedidos == n_pedidosxbrazo) brazo->estado = BRAZO_OCUPADO;
         pthread_mutex_lock(&mutex_pedidos);
@@ -518,6 +540,7 @@ int main(int argc, char *argv[]){
             printf("Error: planificador-> main, error al crear hilo.\n");
         }
     }
+    next = brazosCola;
 
     // Obtiene los pedidos por socket
     estado_hilo = pthread_create(&thread, NULL, threadRecepcionPaquetes, NULL);
