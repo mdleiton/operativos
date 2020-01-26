@@ -102,17 +102,3 @@ int dequeue(struct Cola *cola, char data[MAX], int flag){
     pthread_mutex_unlock(&cola->mutex);
     return 1;
 }
-
-/* Prueba cola
-int main(){
-    struct Cola *cola = (struct Cola*)malloc(sizeof(struct Cola));
-    cola->primero = NULL;
-    cola->final = NULL;
-    char data[MAX];
-    memset(data, '1', MAX* sizeof(char));
-    enqueue(data, cola);
-    display(cola);
-    dequeue(cola);
-    display(cola);
-}
-*/
