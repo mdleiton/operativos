@@ -115,10 +115,10 @@ int  main(int  argc, char *argv[]){
                 informacion->pedidosFinalizados, informacion->brazosActivos, informacion->brazosSuspendidos);
         sem_post(&informacion->mutex);
         memset(instruccion, 0, sizeof(instruccion));
-        printf("OPCIONES:\n 1. Crear un nuevo brazo. \n 2. Suspender un brazo. \n 3. Reanudar brazo. \n Ingrese el # de la opción: ");
+        printf("OPCIONES:\n 1. Crear un nuevo brazo. \n 2. Suspender un brazo. \n 3. Reanudar brazo. \n 4. Refrescar información.\n Ingrese el # de la opción: ");
         scanf("%s", instruccion);
         int opcion = atoi(instruccion);
-        if(opcion <= 0 || opcion > 3) {
+        if(opcion <= 0 || opcion > 4) {
             printf("ERROR: Opción inválida. Intente otra vez.\n");
             continue;
         }
@@ -134,9 +134,10 @@ int  main(int  argc, char *argv[]){
             }
             continue;
         }
+        if(opcion == 4) continue;
         sem_wait(&informacion->mutex);
         int nBrazos = informacion->brazosActivos + informacion->brazosSuspendidos;
-        printf("Ingreso el número del brazo:(1-%d)", nBrazos);
+        printf("Ingreso el número del brazo:(1-%d):", nBrazos);
         sem_post(&informacion->mutex);
         memset(instruccion, 0, sizeof(instruccion));
         scanf("%s", instruccion);
@@ -144,9 +145,9 @@ int  main(int  argc, char *argv[]){
         if(idBrazo > 0 && idBrazo <= nBrazos){
             sem_wait(&procesos->mutex);
             if(opcion == 2){
-                send = enviarSenal(procesos->pidPlanificador, 1, SUSPENDER_BRAZO);
+                send = enviarSenal(procesos->pidPlanificador, idBrazo, SUSPENDER_BRAZO);
             }else{
-                send = enviarSenal(procesos->pidPlanificador, 1, REANUDAR_BRAZO);
+                send = enviarSenal(procesos->pidPlanificador, idBrazo, REANUDAR_BRAZO);
             }
             sem_post(&procesos->mutex);
             if(send != 0){
