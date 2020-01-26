@@ -68,20 +68,9 @@ struct BrazoRobotico* nuevaCola(int id, int cantidadPedidos, int esquema){
  * @param esquema metodo de funcionamiento y prioridad de la cola
  * @return una referencia al brazo robotico */
 struct BrazoRobotico* pushP(struct BrazoRobotico** inicio, int id, int cantidadPedidos, int esquema){
-    struct BrazoRobotico* start = (*inicio);
     struct BrazoRobotico* temp = nuevaCola(id, cantidadPedidos, esquema);
-    if(esquema == ESQUEMA_IGUAL_X_PEDIDOS || esquema == ESQUEMA_PRIMERO_DISPONIBLE ) {
-        if ((*inicio)->cantPedidos > cantidadPedidos) {
-            temp->siguiente = *inicio;
-            (*inicio) = temp;
-        } else {
-            while (start->siguiente != NULL && start->siguiente->cantPedidos < cantidadPedidos) {
-                start = start->siguiente;
-            }
-            temp->siguiente = start->siguiente;
-            start->siguiente = temp;
-        }
-    }
+    temp->siguiente = *inicio;
+    (*inicio) = temp;
     return temp;
 }
 
@@ -93,29 +82,43 @@ struct BrazoRobotico* pushP(struct BrazoRobotico** inicio, int id, int cantidadP
  * @return una referencia al brazo robotico */
 void updateBrazo(struct BrazoRobotico** inicio, int id, int esquema){
     if(esquema == ESQUEMA_PRIMERO_DISPONIBLE){
-        // no es necesario hacer algo
+        return; // no es necesario hacer algo
+    }
+    struct BrazoRobotico* start = (*inicio);
+    struct BrazoRobotico* temporal = NULL;
+    if ((*inicio)->id != id) {
+        while (start->siguiente != NULL) {
+            if(start->siguiente->id == id){
+                temporal = start->siguiente;
+                start->siguiente = temporal->siguiente;
+                break;
+            }
+            start = start->siguiente;
+        }
+    }else{
+        temporal = (*inicio);
+    }
+    if(temporal == NULL){
+        printf("ERROR: BrazoRobotico -> updateBrazo, no existe brazo con ese id.");
+        return;
+    }
+    start = (*inicio);
+    if(temporal -> estado == BRAZO_SUSPENDIDO){ //LO ENVIO AL FINAL
+        while (start->siguiente != NULL) {
+            start = start->siguiente;
+        }
+        temporal->siguiente = start->siguiente;  // a NULL
+        start->siguiente = temporal;
+    }else{
+        while (start->siguiente != NULL && start->siguiente->cantPedidos < temporal->cantPedidos) {
+            start = start->siguiente;
+        }
+        temporal->siguiente = start->siguiente;
+        start->siguiente = temporal;
     }
     if(esquema == ESQUEMA_IGUAL_X_PEDIDOS){
-        struct BrazoRobotico* start = (*inicio);
-        struct BrazoRobotico* temporal = (*inicio);
-        if ((*inicio)->id == id) {
-            return;
-        }else{
-            while (start->siguiente != NULL) {
-                if(start->siguiente->id == id){
-                    temporal = start->siguiente;
-                    start->siguiente = temporal->siguiente;
-                    break;
-                }
-                start = start->siguiente;
-            }
-        }
-        struct BrazoRobotico* start2 = (*inicio);
-            while (start2->siguiente != NULL && start2->siguiente->cantPedidos < temporal->cantPedidos) {
-                start2 = start2->siguiente;
-            }
-            temporal->siguiente = start2->siguiente;
-            start2->siguiente = temporal;
+
+
     }
 }
 
@@ -129,43 +132,39 @@ void updateBrazo(struct BrazoRobotico** inicio, int id, int esquema){
 struct BrazoRobotico* getBrazo(struct BrazoRobotico** inicio, int esquema, int n_pedidos){
     struct BrazoRobotico* start = (*inicio);
     if(esquema == ESQUEMA_PRIMERO_DISPONIBLE){
-        if ((*inicio)->cantPedidos < n_pedidos && start->estado == BRAZO_DISPONIBLE) {
+        if ((*inicio)->cantPedidos < n_pedidos && (*inicio)->estado == BRAZO_DISPONIBLE) {
             return (*inicio);
         }else{
-            while (start !=NULL) {
+            while (start != NULL) {
                 if(start->cantPedidos < n_pedidos && start->estado == BRAZO_DISPONIBLE){
                     return start;
                 }
                 start = start->siguiente;
             }
         }
-    }else if(esquema == ESQUEMA_IGUAL_X_PEDIDOS){
-        struct BrazoRobotico* temporal = *inicio;
-        if((*inicio)->siguiente == NULL){
-            printf("ERROR: BrazoRobotico -> popP, No existen más brazos disponibles.");
-            return NULL;
-        }
-        (*inicio) = (*inicio)->siguiente;
-        return temporal;
+    }else if(esquema == ESQUEMA_IGUAL_X_PEDIDOS || esquema == ESQUEMA_MENOR_ITEM_PENDIENTES){
+        if ((*inicio)->cantPedidos < n_pedidos && start->estado == BRAZO_DISPONIBLE) return (*inicio);
     }
     return NULL;
 }
 
+/**
+ * permite obtener una referencia a un brazo robotico con el id
+ * @param inicio referencia al primer brazo robótico de la cola
+ * @param id identificador del brazo robótico
+ * @param esquema metodo de funcionamiento y prioridad de la cola
+ * @return una referencia al brazo robotico */
 struct BrazoRobotico* getBrazobyId(struct BrazoRobotico** inicio, int id, int esquema){
     struct BrazoRobotico* start = (*inicio);
     struct BrazoRobotico* temporal = NULL;
-    if(esquema == ESQUEMA_PRIMERO_DISPONIBLE){
-        if ((*inicio)->id == id) {
-            return (*inicio);
-        }else{
-            while (start->siguiente != NULL) {
-                if(start->siguiente->id == id){
-                    temporal = start->siguiente;
-                    start->siguiente = temporal->siguiente;
-                    break;
-                }
-                start = start->siguiente;
+    if ((*inicio)->id == id) {
+        return (*inicio);
+    }else{
+        while (start != NULL) {
+            if(start->id == id){
+                return start;
             }
+            start = start->siguiente;
         }
     }
     return temporal;
