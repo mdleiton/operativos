@@ -360,6 +360,10 @@ void manejadorCrear(int signum, siginfo_t *info, void *ptr){
 void manejadorSuspender(int signum, siginfo_t *info, void *ptr){
     int brazoId = info->si_value.sival_int;
     printf("manejadorSuspender, señal recibida para suspender el brazo con id: %d.\n", brazoId);
+    if(esquema == ESQUEMA_MENOR_ITEM_PENDIENTES){
+        printf("Reanudar/supender brazos bajo este esquema no esta implementado\n");
+        return;
+    }
     pthread_mutex_lock(&mutex);
     struct BrazoRobotico* brazo = getBrazobyId(&brazosCola, brazoId, esquema);
     pthread_mutex_unlock(&mutex);
@@ -407,6 +411,10 @@ void manejadorSuspender(int signum, siginfo_t *info, void *ptr){
 void manejadorReanudar(int signum, siginfo_t *info, void *ptr){
     int brazoId = info->si_value.sival_int;
     printf("manejadorReanudar, señal recibida para reanudar el brazo con id: %d.\n", brazoId);
+    if(esquema == ESQUEMA_MENOR_ITEM_PENDIENTES){
+        printf("Reanudar/supender brazos bajo este esquema no esta implementado\n");
+        return;
+    }
     pthread_mutex_lock(&mutex);
     struct BrazoRobotico* brazo = getBrazobyId(&brazosCola, brazoId, esquema);
     pthread_mutex_unlock(&mutex);
@@ -570,7 +578,3 @@ int main(int argc, char *argv[]){
     }
     return 0;
 }
-/*
- * crear brazo
- * implementar esquema 2 y 3
- */
