@@ -5,3 +5,4 @@ all:
 clean:
 	rm eorder_gen
 	rm eplanificadorBrazosR
+	rm eadmin
