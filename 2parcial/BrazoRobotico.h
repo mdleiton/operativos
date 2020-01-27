@@ -87,12 +87,14 @@ void updateBrazo(struct BrazoRobotico** inicio, int id, int esquema){
     if(esquema == ESQUEMA_MENOR_ITEM_PENDIENTES){
         struct BrazoRobotico* start = (*inicio);
         struct BrazoRobotico* temporal = NULL;
+        struct BrazoRobotico* prev = NULL;
         if ((*inicio)->id != id) {
             while (start != NULL) {
                 if(start->id == id){
                     temporal = start;
                     break;
                 }
+                prev = start;
                 start = start->siguiente;
             }
         }else{
@@ -104,21 +106,27 @@ void updateBrazo(struct BrazoRobotico** inicio, int id, int esquema){
         }
         start = (*inicio);
         if(temporal -> estado == BRAZO_SUSPENDIDO){ //LO ENVIO AL FINAL
+            if((*inicio)->id == temporal->id){
+                (*inicio) = (*inicio)->siguiente;
+            }
             while (start->siguiente != NULL) {
                 start = start->siguiente;
+            }
+            if(prev !=  NULL){
+                prev->siguiente = temporal->siguiente;
             }
             temporal->siguiente = start->siguiente;  // a NULL
             start->siguiente = temporal;
         }else{
-            if((*inicio)->cantPedidos >= temporal->cantPedidos){
-                (*inicio) = (*inicio)->siguiente;
+            if((*inicio)->id == temporal->id){
                 start = (*inicio);
-                while (start != NULL && start->cantPedidos < temporal->cantPedidos) {
-                    if(start->siguiente == NULL){
-                        temporal->siguiente = start->siguiente;
-                        start->siguiente = temporal;
+                if(start->siguiente != NULL){
+                    if(start->pendientesItem <= start->siguiente->pendientesItem){
                         return;
                     }
+                }
+                (*inicio) = (*inicio)->siguiente;
+                while (start->siguiente != NULL && start->siguiente->pendientesItem < temporal->pendientesItem) {
                     start = start->siguiente;
                 }
                 temporal->siguiente = start->siguiente;
@@ -126,16 +134,29 @@ void updateBrazo(struct BrazoRobotico** inicio, int id, int esquema){
                 return;
             }else{
                 start = (*inicio);
-                while (start->siguiente != NULL && start->siguiente->cantPedidos < temporal->cantPedidos) {
+                if(start->pendientesItem >= temporal->pendientesItem){
+                    if(prev != NULL){
+                        prev->siguiente = temporal->siguiente;
+                    }
+                    temporal->siguiente = (*inicio);
+                    (*inicio) = temporal;
+                    return;
+                }
+                while (start != NULL && start->pendientesItem < temporal->pendientesItem) {
+                    if(start->siguiente == NULL){
+                        temporal->siguiente = start->siguiente;
+                        start->siguiente = temporal;
+                        return;
+                    }
+                    prev = start;
                     start = start->siguiente;
                 }
-                temporal->siguiente = start->siguiente;
+                temporal->siguiente = start;
                 start->siguiente = temporal;
+                return;
             }
-
         }
     }
-
 }
 
 /**
@@ -184,4 +205,13 @@ struct BrazoRobotico* getBrazobyId(struct BrazoRobotico** inicio, int id, int es
         }
     }
     return temporal;
+}
+
+void display(struct BrazoRobotico** inicio){
+    struct BrazoRobotico* start = (*inicio);
+    printf("Estado Brazo \n");
+    while (start != NULL) {
+        printf("brazo %d, total pedientes: %d\n", start->id, start->pendientesItem);
+        start = start->siguiente;
+    }
 }
